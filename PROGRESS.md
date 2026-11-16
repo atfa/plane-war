@@ -72,7 +72,23 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
-## 步骤 5 已落地（新敌机 + 编队）
+## 步骤 6 已落地（表现打磨）
+
+- 顿帧 hit-stop：`Tuning.hitStopFor(type, bossKill)`（重型 0.09s / 母舰 0.07s / BOSS 0.16s，杂兵 0），
+  `HIT_STOP_SCALE=0.08`，**只缩放敌机与子弹的 dt**，`time`、autodie、`bossEnter` 走真实时间；
+  每秒预算 `HIT_STOP_BUDGET=0.35s`，连杀不会顿成卡顿。日志 `hitstop n= t=`。
+- 连杀横幅：`Tuning.streakBanner(combo)` 只在 5/10/20 精确命中时出一次；banner 加优先级
+  （BOSS=3 > 连杀=1），低优先级会被丢弃并日志 `banner dropped (lower priority):`。
+- 离屏危险箭头：只对狙击手 / 母舰（远程威胁）且 `y < topPad` 时画，位置鈐在 `topPad+dp(14)`
+  与 `[dp(20), W-dp(20)]` 内（DeX inset top=120 / bot=57 不会被系统栏吃掉），
+  单帧上限 `MAX_DANGER_ARROWS=6`；日志 `danger n= total=`。
+- 新音效：`AudioFx.ALARM`（BOSS 警报，登场时播）与 `AudioFx.STREAK`（连杀铃音），VER v6 → v7，
+  17 → 19 sfx（必须 bump VER，否则设备上旧 wav 缓存不重建）。
+- `gameover` 末尾追加 ` streak= hitstop= danger=`；test.sh 断言 streak >= 20、hitstop >= 1、danger >= 1。
+- JVM 断言 7855 → 7874 项（连杀里程碑精确命中、顿帧时长上限与预算、箭头上限）。
+- 实测：`./test_jvm.sh` 7874 + boss 54654 全绿；`DIFF=1 ./test.sh` PASS（streak=20、hitstop=1、
+  danger=4、boss killed=1、fps 60.2、audio ready: 19 sfx、crash buffer 空）。
+
 
 （步骤 4 的说明见 git log `f958e24` 与 README。）
 

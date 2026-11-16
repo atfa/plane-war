@@ -85,6 +85,9 @@ MINE=$(echo "$LOG" | grep -oE 'mine n=[0-9]+' | tail -1 | cut -d= -f2)
 SNIPER=$(echo "$LOG" | grep -cE 'sniper aim( telegraph)?')
 MOTHER=$(echo "$LOG" | grep -c 'mother spawn')
 MBLOCK=$(echo "$LOG" | grep -oE 'mother blocked room=[0-9-]+ cap=[0-9]+' | tail -1)
+STREAK=$(echo "$LOG" | grep -oE 'streak n=[0-9]+' | tail -1 | cut -d= -f2)
+HITSTOP=$(echo "$LOG" | grep -c 'hitstop n=')
+DANGER=$(echo "$LOG" | grep -c 'danger n=')
 NEWMISS=""
 for t in 5 6 7 8; do
   n=$(echo "$LOG" | grep -c "enemy spawn type=$t")
@@ -109,6 +112,7 @@ echo "stats:   $STATS lines with energy/bomb/graze/fever/boss/fps"
 echo "graze:   $GRAZE log lines, last ${GRAZED:-none} (graze charges energy + combo)"
 echo "fever:   $FEVER stats lines with fever=1 (combo fever must be reachable)"
 echo "boss:    spawn=$BSPAWN killed=$BKILL last summon=${BSUMMON:-none} (3 phase boss must die)"
+echo "polish:  streak=${STREAK:-none} hitstop=$HITSTOP danger=$DANGER (kill streak banners, hit-stop on heavy kills, off-screen threat arrows)"
 echo "waves:   mother blocked: ${MBLOCK:-never}"
 echo "waves:   formations=$WAVE split=$SPLIT mines=${MINE:-none} sniper=${SNIPER:-none} mother=${MOTHER:-none} missing:${NEWMISS:- none}"
 echo "weapons: pup laser=$LASERPUP pup homing=$HOMEPUP last laser tick=${LASERHIT:-none} missiles=${MISSILE:-none}"

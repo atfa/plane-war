@@ -25,11 +25,11 @@ public class AudioFx {
     public static final String SHOT = "shot", HIT = "hit", KILL = "kill", BIGKILL = "bigkill",
             POWER = "power", SHIELD = "shield", BOMB = "bomb", HURT = "hurt", OVER = "over",
             EVENT = "event", PICK = "pick", START = "start", WALL = "wall", SUPER = "super",
-            GRAZE = "graze", LASER = "laser", MISSILE = "missile";
+            GRAZE = "graze", LASER = "laser", MISSILE = "missile", ALARM = "alarm", STREAK = "streak";
 
     private static final String TAG = "planewar";
     private static final int RATE = 22050;
-    private static final String VER = "v6";
+    private static final String VER = "v7";
 
     private final Context ctx;
     private final HashMap<String, Integer> ids = new HashMap<String, Integer>();
@@ -135,7 +135,7 @@ public class AudioFx {
                     }
                 }
             });
-            String[] names = {SHOT, HIT, KILL, BIGKILL, POWER, SHIELD, BOMB, HURT, OVER, EVENT, PICK, START, WALL, SUPER, GRAZE, LASER, MISSILE};
+            String[] names = {SHOT, HIT, KILL, BIGKILL, POWER, SHIELD, BOMB, HURT, OVER, EVENT, PICK, START, WALL, SUPER, GRAZE, LASER, MISSILE, ALARM, STREAK};
             for (String n : names) {
                 File f = new File(dir, "sfx_" + n + "_" + VER + ".wav");
                 if (!f.exists()) writeWav(f, sfx(n, RATE), RATE);
@@ -251,6 +251,18 @@ public class AudioFx {
             b = new float[(int) (rate * 0.18)];
             noise(b, rate, 0, 0.16, 0.12, 0.85);
             sweep(b, rate, 0, 0.16, 900, 260, 0.10, Wave.TRIANGLE);
+        } else if (name.equals(ALARM)) {
+            // the boss klaxon: two rising tones, must read as "something big arrived"
+            b = new float[(int) (rate * 0.55)];
+            for (int k = 0; k < 2; k++) {
+                tone(b, rate, k * 0.26, 0.22, 320, 0.16, Wave.SAW);
+                sweep(b, rate, k * 0.26, 0.22, 320, 620, 0.10, Wave.SQUARE);
+            }
+        } else if (name.equals(STREAK)) {
+            // kill streak chime: three rising notes
+            b = new float[(int) (rate * 0.26)];
+            int[] n = {784, 988, 1319};
+            for (int i = 0; i < n.length; i++) tone(b, rate, i * 0.07, 0.10, n[i], 0.12, Wave.TRIANGLE);
         } else {
             b = new float[(int) (rate * 0.1)];
         }

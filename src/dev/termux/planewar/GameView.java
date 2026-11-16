@@ -635,6 +635,7 @@ public class GameView extends View {
     }
 
     private void update(float dt) {
+        realDt = dt;
         time += dt;
         scoreF += dt * 12f;
         if (slowT > 0) slowT -= dt;
@@ -739,6 +740,16 @@ public class GameView extends View {
             }
         }
 
+        // hit-stop scales the world (enemies, bullets) only: the run clock, the autodie timer and
+        // the boss entrance camera keep running on real time, so a freeze can never stall a test
+        if (hitStop > 0f) {
+            hitStop -= dt;
+            hitStopBudget = Math.max(0f, hitStopBudget - dt);
+            if (hitStop <= 0f) hitStop = 0f;
+        } else {
+            hitStopBudget = Math.min(Tuning.HIT_STOP_BUDGET, hitStopBudget + dt);
+        }
+        float wdt = hitStop > 0f ? dt * Tuning.HIT_STOP_SCALE : dt;
         steer(dt);
         fire(dt);
         if (waveHook > 0) applyWaveHook();
@@ -749,8 +760,8 @@ public class GameView extends View {
                 hookPowerIn = 1.5f;
             }
         }
-        moveBullets(dt);
-        moveEnemies(dt);
+        moveBullets(wdt);
+        moveEnemies(wdt);
         movePowers(dt);
         collisions();
         updateBg(dt);
@@ -1242,7 +1253,15 @@ public class GameView extends View {
         spawnRandomPower(x, -dp(30));
     }
 
-    private void banner(String s, String sub) {
+    private void banner(String s, String sub) { banner(s, sub, 1); }
+
+    /** banner priority: a streak must never overwrite a boss entrance (test.sh reads the name off screen) */
+    private void banner(String s, String sub, int pri) {
+        if (bannerT > 0 && pri < bannerPri) {
+            Log.i(TAG, "banner dropped (lower priority): " + s);
+            return;
+        }
+        bannerPri = pri;
         banner = s;
         bannerSub = sub;
         bannerT = 2.1f;
@@ -1405,6 +1424,11 @@ public class GameView extends View {
     }
 
     int sniperShots, motherSpawns, minesDropped, splits, motherBlocks;
+    // polish: hit-stop, streak banners, edge danger arrows
+    float hitStop, hitStopBudget = Tuning.HIT_STOP_BUDGET;
+    int streaks, dangers, hitStops;
+    int bannerPri;
+    float realDt;
 
     /** a splitter breaks into two grunts; capped, and the children never split again */
     private void splitEnemy(Enemy e) {
@@ -1579,6 +1603,19 @@ public class GameView extends View {
         if (e.type == Wave.SPLITTER) splitEnemy(e);
         kills++;
         combo++;
+        String streak = Tuning.streakBanner(combo);
+        if (streak != null) {
+            banner(streak, "x" + combo + " 连杀", 1);
+            audio.play(AudioFx.STREAK, 1f);
+            streaks++;
+            Log.i(TAG, "streak n=" + combo);
+        }
+        float hs = Tuning.hitStopFor(e.type, false);
+        if (hs > 0f && hitStopBudget >= hs) {
+            hitStop = hs;
+            hitStops++;
+            Log.i(TAG, "hitstop n=" + hitStops + " t=" + hs);
+        }
         if (combo > maxCombo) maxCombo = combo;
         comboT = 2.4f;
         checkFever();
@@ -1962,7 +1999,8 @@ public class GameView extends View {
                 + " rank=" + rank + " events=" + eventsSeen + " diff=" + DIFF_NAME[diff]
                 + " superFails=" + superFails + " graze=" + graze + " missile=" + missilesFired
                 + " laser=" + laserHits + " wave=" + wavesSent + " split=" + splits
-                + " mine=" + minesDropped + " sniper=" + sniperShots + " mother=" + motherSpawns);
+                + " mine=" + minesDropped + " sniper=" + sniperShots + " mother=" + motherSpawns
+                + " streak=" + streaks + " hitstop=" + hitStops + " danger=" + dangers);
         if (rank >= 0) {
             ui.postDelayed(new Runnable() {
                 @Override public void run() { promptName(rank); }
@@ -2142,6 +2180,7 @@ public class GameView extends View {
         drawBackground(c);
         drawPowers(c);
         drawEnemies(c);
+        drawDangerArrows(c);
         drawBoss(c);
         drawBullets(c);
         drawParticles(c);
@@ -2306,6 +2345,29 @@ public class GameView extends View {
                     paint.setStyle(Paint.Style.FILL);
                 }
             }
+        }
+    }
+
+    /** edge arrows for off-screen long-range threats, clamped inside the play area (DeX insets) */
+    private void drawDangerArrows(Canvas c) {
+        int n = 0;
+        for (Enemy e : enemies) {
+            if (e.type != Wave.SNIPER && e.type != Wave.MOTHER) continue;
+            if (e.y >= topPad) continue;
+            if (n++ >= Tuning.MAX_DANGER_ARROWS) break;
+            float ax = Math.max(dp(20), Math.min(W - dp(20), e.x));
+            float ay = topPad + dp(14);
+            paint.setColor(Color.rgb(255, 90, 90));
+            path.reset();
+            path.moveTo(ax, ay + dp(10));
+            path.lineTo(ax - dp(9), ay - dp(6));
+            path.lineTo(ax + dp(9), ay - dp(6));
+            path.close();
+            c.drawPath(path, paint);
+        }
+        if (n > 0) {
+            dangers += n;
+            if (dangers % 20 < n) Log.i(TAG, "danger n=" + n + " total=" + dangers);
         }
     }
 
@@ -2610,8 +2672,8 @@ public class GameView extends View {
         bossHitFx = 0f;
         bossX = W * 0.5f;
         bossY = -bossR() - dp(20);
-        banner("BOSS 登场 · " + boss.name(), boss.sub());
-        audio.play(AudioFx.EVENT, 0.9f);
+        banner("BOSS 登场 · " + boss.name(), boss.sub(), 3);
+        audio.play(AudioFx.ALARM, 1f);
         vibro.bomb();
         shake = Math.max(shake, 14f);
         Log.i(TAG, "boss spawn name=" + boss.name() + " hp=" + (int) boss.maxHp()
@@ -2629,7 +2691,7 @@ public class GameView extends View {
             }
             return;
         }
-        bossEnter += dt;
+        bossEnter += realDt;          // real time: a hit-stop or a pause must not strand the entrance
         if (bossHitFx > 0) bossHitFx -= dt;
         float slow = slowT > 0 ? 0.45f : 1f;
         float home = topPad + dp(120);

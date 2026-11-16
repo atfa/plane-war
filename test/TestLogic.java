@@ -27,6 +27,7 @@ public class TestLogic {
         bossFight();
         weapons();
         waves();
+        polish();
         System.out.println(failed == 0
                 ? "OK: " + checks + " checks passed"
                 : "FAILED: " + failed + "/" + checks + " checks failed");
@@ -137,6 +138,33 @@ public class TestLogic {
         }
         ok(Wave.newTypeFor(3, 30f) == Wave.SPLITTER, "the mothership waits until the player can survive it");
     }
+
+    static void polish() {
+        System.out.println("[Polish]");
+        ok(Tuning.streakBanner(5).equals("五连杀") && Tuning.streakBanner(10) != null
+                && Tuning.streakBanner(20) != null, "the 5/10/20 streaks all banner");
+        ok(Tuning.streakBanner(6) == null && Tuning.streakBanner(19) == null
+                && Tuning.streakBanner(21) == null, "only the exact milestone fires, once");
+        ok(Tuning.streakBanner(0) == null && Tuning.streakBanner(-3) == null,
+                "no banner for a fresh or broken combo");
+        ok(Tuning.hitStopFor(0, false) == 0f, "a grunt never freezes the game");
+        ok(Tuning.hitStopFor(4, false) > 0f && Tununing(Tuning.hitStopFor(4, false)),
+                "a heavy earns a short hit-stop");
+        ok(Tuning.hitStopFor(8, false) > 0f, "a mothership earns a hit-stop");
+        ok(Tuning.hitStopFor(0, true) > Tuning.hitStopFor(4, false),
+                "a boss kill is the biggest beat");
+        for (int t = 0; t < 9; t++)
+            ok(Tuning.hitStopFor(t, false) <= 0.1f && Tuning.hitStopFor(t, true) <= 0.2f,
+                    "no hit-stop is long enough to read as a stutter");
+        ok(Tuning.HIT_STOP_SCALE > 0f && Tuning.HIT_STOP_SCALE < 0.5f,
+                "hit-stop is a near freeze, not a slow-motion");
+        ok(Tuning.HIT_STOP_BUDGET <= 0.5f,
+                "the per-second budget caps hit-stop, so a streak cannot freeze the game solid");
+        ok(Tuning.MAX_DANGER_ARROWS >= 1 && Tuning.MAX_DANGER_ARROWS <= 8,
+                "edge arrows are capped, so a full screen of threats does not spam the HUD");
+    }
+
+    static boolean Tununing(float v) { return v > 0f && v <= 0.1f; }
 
     // ---------------------------------------------------------------- Tuning
 

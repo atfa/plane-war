@@ -82,6 +82,42 @@ public final class Tuning {
         return combo >= FEVER_COMBO;
     }
 
+    // ------------------------------------------------------------ polish (hit-stop, streaks)
+
+    /** kill counts that earn a streak banner, ascending */
+    public static final int[] STREAK_AT = {5, 10, 20};
+    private static final String[] STREAK_LABEL = {"五连杀", "十连杀", "二十连杀"};
+
+    /**
+     * The streak banner for a combo, or null when this combo is not a milestone.
+     * Only exact hits trigger, so a 12-combo pays the 10 banner once and never repeats it.
+     */
+    public static String streakBanner(int combo) {
+        for (int i = 0; i < STREAK_AT.length; i++)
+            if (combo == STREAK_AT[i]) return STREAK_LABEL[i];
+        return null;
+    }
+
+    /**
+     * Hit-stop length in seconds for a kill: a heavy, a mothership and a boss phase change are
+     * the beats the player should feel; a grunt is not. 0 means no hit-stop.
+     */
+    public static float hitStopFor(int type, boolean bossKill) {
+        if (bossKill) return 0.16f;
+        if (type == 4) return 0.09f;             // heavy
+        if (type == 8) return 0.07f;             // mothership
+        return 0f;
+    }
+
+    /** the world time scale during a hit-stop: a freeze, not a slow-motion */
+    public static final float HIT_STOP_SCALE = 0.08f;
+
+    /** how many off-screen threats one frame may mark with an edge arrow, so a full screen cannot spam */
+    public static final int MAX_DANGER_ARROWS = 6;
+
+    /** hit-stop is capped per second, so a streak cannot freeze the game into a stutter */
+    public static final float HIT_STOP_BUDGET = 0.35f;
+
     static int clampDiff(int d) {
         return d < 0 ? 0 : (d > 2 ? 2 : d);
     }
