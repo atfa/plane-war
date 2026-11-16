@@ -15,6 +15,10 @@
 * **擦弹（graze）**：敌弹在机身外 dp(46) 的环带内掠过（未击中）→ 充能 + 连击 + 少量分数，
   同一颗弹 0.25s 内只算一次；直击不奖励（先判直击）。
 * **连击狂热**：连击 ≥ 30 进入狂热，得分 x2 + 射速提升 + 机身红色尾焰，进入时全屏横幅。
+* **多阶段 BOSS**：每存活 80 秒出场一只命名 BOSS（3 种轮换：玄铁堡垒 / 雷穹母舰 / 赤炎妖机），
+  顶部大血条带阶段刻度，登场横幅 + 下滑运镜；血量降到 66% / 33% 时进入新阶段：
+  环形弹幕 → 瞄准连发 → 扇形扫射 + 召唤杂兵（受同屏上限约束，不会截成半截编队）；
+  击杀时全屏清弹 + 慢动作 + 大额分数 + 必掉火力/炸弹/维修三件道具。
 * 拾取掉落道具：火力 / 护盾 / 维修 / 炸弹 / 加分 / 速射。
 * 敌人：杂兵、俯冲机、炮艇、精英、重型轰炸机（小 boss）。
 * 随机事件：敌袭、狂暴、EMP、道具雨、缓速场、重型轰炸机登场。
@@ -107,9 +111,10 @@ DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 | `--ei bomb N` | 本局内自动引爆 N 颗炸弹（日志 `bomb n=…`） |
 | `--ei superall N` | 依次强制释放前 N 种超必杀主题（去随机化，保证 5 种主题都被跑到） |
 | `--ei graze N` | 本局内自动擦弹 N 次（走与碰撞同一个 `grazeHit()`，日志 `graze n=…`） |
+| `--ei boss N` | 本局内强制出场 N 只 BOSS（t=6s 起，不等 t=80s；日志 `boss spawn name= hp=` / `boss killed`） |
 
 测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**5 种超必杀主题全部释放且无异常**
-（`superFails=0`）、炸弹日志、**擦弹日志 `graze n=`**、**`stats` 行里至少一次 `fever=1`**、
+（`superFails=0`）、炸弹日志、擦弹日志、`fever=1`、**BOSS 出场且被击破**（`boss spawn name=` / `boss killed`）、
 **帧率**（`fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
 `stats` 行形如
 `stats t=12 score=2427 kills=11 weapon=1 lives=3 enemies=1 energy=37 bomb=0 graze=0 fever=0 boss=0 fps=60.2`。
@@ -140,6 +145,7 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 | `src/dev/termux/planewar/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
 | `src/dev/termux/planewar/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
 | `src/dev/termux/planewar/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
+| `src/dev/termux/planewar/Boss.java` | 3 阶段 BOSS 状态机（阶段阈值/弹幕节奏/召唤上限），**纯 Java**；**BOSS 血量走这里的 `HP[]`×(1+0.35×难度)，与 `Tuning` 的敌机难度系数是两套** |
 | `src/dev/termux/planewar/AudioFx.java` | 运行时合成 15 种音效 + 循环芯片音乐 |
 | `src/dev/termux/planewar/Vibro.java` | 震动封装（API 24 / 31+） |
 | `src/dev/termux/planewar/Scores.java` | 本地排行榜（SharedPreferences） |

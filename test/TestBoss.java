@@ -19,6 +19,7 @@ public class TestBoss {
 
     public static void main(String[] a) {
         roster();
+        tables();
         phaseThresholds();
         spawnScaling();
         hurtRules();
@@ -111,8 +112,33 @@ public class TestBoss {
         ok(b.hpFrac() >= 0f && b.hpFrac() <= 1f, "hp fraction stays inside [0,1]");
         float after = b.hp();
         ok(!b.hurt(50f) && b.hp() == after, "a dead boss ignores further damage");
-        ok(b.act(0.1f) == 0, "a dead boss requests nothing");
-        for (int i = 0; i < 200; i++) ok(b.act(0.016f) == 0, "a dead boss stays silent");
+        // the death is reported exactly once: twice would pay the kill score and the drop twice
+        ok(b.act(0.1f, 4) == Boss.ACT_DIE, "the death is reported as ACT_DIE");
+        ok(b.act(0.1f, 4) == 0, "ACT_DIE is not repeated");
+        for (int i = 0; i < 200; i++) ok(b.act(0.016f, 4) == 0, "a dead boss stays silent");
+    }
+
+    /** the roster rotation, the hp table and the cadence bound the view relies on */
+    static void tables() {
+        ok(Boss.pick(0) == 0 && Boss.pick(1) == 1 && Boss.pick(2) == 2, "the first three fights use all three bosses");
+        ok(Boss.pick(3) == 0 && Boss.pick(7) == 1, "the roster wraps");
+        ok(Boss.pick(-1) >= 0 && Boss.pick(-1) < Boss.COUNT, "a negative index wraps into range");
+        for (int k = 0; k < Boss.COUNT; k++) {
+            ok(Boss.hpFor(k, 0) < Boss.hpFor(k, 1) && Boss.hpFor(k, 1) < Boss.hpFor(k, 2),
+                    "boss " + k + " hp rises with difficulty");
+            ok(Boss.hpFor(k, 1) == Boss.spawn(k, 1, 0).maxHp(),
+                    "boss " + k + " hpFor matches what spawn builds (the log line must not lie)");
+            ok(Boss.spawn(k, 1, 0).radiusDp() > 0 && Boss.spawn(k, 1, 0).radiusDp() < 200f,
+                    "boss " + k + " hull radius is sane");
+            ok(Boss.spawn(k, 1, 0).color() != 0, "boss " + k + " has a colour");
+        }
+        for (int d = 0; d < 3; d++) {
+            ok(Boss.maxGapSec(0, d) > Boss.maxGapSec(1, d) && Boss.maxGapSec(1, d) > Boss.maxGapSec(2, d),
+                    "the guaranteed gap shrinks as the boss gets angry (diff " + d + ")");
+            if (d < 2) ok(Boss.maxGapSec(0, d) > Boss.maxGapSec(0, d + 1),
+                    "higher difficulty fires sooner (diff " + d + " vs " + (d + 1) + ")");
+            ok(Boss.maxGapSec(-3, d) > 0 && Boss.maxGapSec(9, d) > 0, "maxGapSec clamps its phase");
+        }
     }
 
     /** a live boss must keep firing: no long silent gap in any phase */
@@ -123,7 +149,7 @@ public class TestBoss {
                 float dt = 1f / 60f, gap = 0f, worst = 0f;
                 int fires = 0;
                 for (int f = 0; f < 60 * 60; f++) {          // 60 s in phase 0
-                    int req = b.act(dt);
+                    int req = b.act(dt, 4);
                     gap += dt;
                     if ((req & Boss.ACT_RING) != 0) {
                         fires++;
@@ -133,7 +159,9 @@ public class TestBoss {
                     ok(req >= 0, "act() never returns a negative mask");
                 }
                 ok(fires >= 20, "boss " + k + " diff " + d + " fires the ring often enough (" + fires + " in 60s)");
-                ok(worst < 4f, "boss " + k + " diff " + d + " never goes silent for >4s (worst " + worst + "s)");
+                float bound = Boss.maxGapSec(0, d) + 0.2f;
+                ok(worst <= bound, "boss " + k + " diff " + d + " keeps the promised cadence (worst "
+                        + worst + "s, bound " + bound + "s)");
             }
         }
     }
@@ -147,16 +175,18 @@ public class TestBoss {
             boolean summonOutsideLast = false, sawSummon = false, sawFan = false, sawAim = false;
             int room = 4;
             for (int f = 0; f < 60 * 120 && !b.isDead(); f++) {
-                int req = b.act(dt);
+                int req = b.act(dt, room);
                 int p = b.phase();
                 seen[p] = true;
                 if (p != Boss.PHASES - 1 && (req & Boss.ACT_SUMMON) != 0) summonOutsideLast = true;
                 if ((req & Boss.ACT_SUMMON) != 0) {
                     sawSummon = true;
-                    int n = b.summonCount(room);
+                    int n = b.summonCount();
+                    ok(n == b.summonCount(room), "the request matches what the cap allows");
                     ok(n <= room, "summon never exceeds the free slots (room=" + room + " -> " + n + ")");
                     ok(n == 0 || n >= 2, "a summon wave is never a single straggler");
                 }
+                if ((req & Boss.ACT_SUMMON) == 0) ok(b.summonCount() == 0, "no summon request, no summon count");
                 if ((req & Boss.ACT_FAN) != 0) sawFan = true;
                 if ((req & Boss.ACT_AIM) != 0) sawAim = true;
                 ok(b.hpFrac() >= 0f && b.hpFrac() <= 1f, "hp fraction stays in [0,1] mid-fight");

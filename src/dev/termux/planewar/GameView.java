@@ -149,6 +149,12 @@ public class GameView extends View {
     final float[] boltX = new float[Super.MAX_IMPACTS];   // 万雷齐鸣 columns (visual)
     final float[] boltT = new float[Super.MAX_IMPACTS];
     int graze, bossAlive;         // reported in the periodic stats line
+    Boss boss;                    // the live boss, null when none is on screen
+    float bossX, bossY, bossEnter, bossHitFx;
+    int bossesKilled;             // scales the next boss
+    float nextBossAt = 80f;       // natural arrival time
+    int bossHook;                 // test hook: force N boss arrivals
+    float bossHookNext;
     boolean feverWas;             // rising edge detector for the fever banner
     int grazeHook;                // test hook: fire N grazes during a run
     float grazeHookNext;
@@ -312,6 +318,11 @@ public class GameView extends View {
         graze = 0;
         feverWas = false;
         bossAlive = 0;
+        boss = null;
+        bossesKilled = 0;
+        nextBossAt = 80f;
+        bossEnter = 0f;
+        bossHitFx = 0f;
         autoSkillT = 0f;
         for (int i = 0; i < boltT.length; i++) boltT[i] = 0f;
         if (W > 0) {
@@ -387,6 +398,12 @@ public class GameView extends View {
     void hookGraze(int n) {
         grazeHook = n;
         grazeHookNext = 6f;
+    }
+
+    /** test hook: force N boss arrivals, starting at t=6s */
+    void hookBoss(int n) {
+        bossHook = n;
+        bossHookNext = 6f;
     }
 
     /** test hook: fire every super theme once, spaced out, so the test can assert all five names */
@@ -596,7 +613,8 @@ public class GameView extends View {
             Log.i(TAG, "stats t=" + (int) time + " score=" + score + " kills=" + kills
                     + " weapon=" + weapon + " lives=" + lives + " enemies=" + enemies.size()
                     + " energy=" + (int) energy + " bomb=" + bombStock + " graze=" + graze
-                    + " fever=" + (feverActive() ? 1 : 0) + " boss=" + bossAlive
+                    + " fever=" + (feverActive() ? 1 : 0)
+                    + " boss=" + bossAlive + (boss != null ? "/" + (int) boss.hp() : "")
                     + " fps=" + String.format(java.util.Locale.US, "%.1f", fpsAvg));
         }
 
@@ -632,6 +650,14 @@ public class GameView extends View {
             superThemeForce = -1;
             superAll--;
         }
+
+        // test hook: force a boss arrival - a 26s autopilot run never reaches t=80s
+        if (bossHook > 0 && time >= bossHookNext) {
+            bossHookNext += 12f;
+            bossHook--;
+            spawnBoss(bossesKilled);
+        }
+        updateBoss(dt);
 
         // passive charge: a run always earns at least one super blast
         energy = Math.min(Tuning.ENERGY_MAX, energy + Tuning.energyPerSec(diff) * dt);
@@ -769,6 +795,11 @@ public class GameView extends View {
         for (Enemy e : enemies) {
             float d = (e.x - sx) * (e.x - sx) + (e.y - sy) * (e.y - sy);
             if (d < be) { be = d; tx = e.x; ty = Math.min(sy, e.y + dp(150)); }
+        }
+        // a boss is worth lining up on: it counts as a target at up to 2.5x the grunt range
+        if (boss != null && bossEnter > 1.5f) {
+            float d = (bossX - sx) * (bossX - sx) + (bossY - sy) * (bossY - sy);
+            if (d < be * 2.5f) { tx = bossX; ty = Math.min(sy, bossY + dp(150)); }
         }
         for (Bullet b : ebullets) {
             if (Math.hypot(b.x - sx, b.y - sy) < dp(80)) {
@@ -1191,6 +1222,19 @@ public class GameView extends View {
 
         if (invuln > 0 || state != RUNNING) return;
 
+        // player bullets -> boss (once it has finished its entrance, so the intro is safe)
+        if (boss != null && bossEnter > 1.2f) {
+            float br = bossR();
+            for (int i = bullets.size() - 1; i >= 0 && boss != null; i--) {
+                Bullet b = bullets.get(i);
+                float dx = b.x - bossX, dy = b.y - bossY;
+                if (dx * dx + dy * dy < (br + b.r) * (br + b.r)) {
+                    bullets.remove(i);
+                    hitBoss(b);
+                }
+            }
+        }
+
         // enemy bullets -> player
         float grazeBand = dp(Tuning.GRAZE_RADIUS_DP);
         for (int i = ebullets.size() - 1; i >= 0; i--) {
@@ -1222,6 +1266,12 @@ public class GameView extends View {
                 damagePlayer();
                 return;
             }
+        }
+        // the boss hull blocks the player: ramming it costs a life
+        if (boss != null && bossEnter > 1.5f) {
+            float dx = bossX - sx, dy = bossY - sy;
+            float rr = bossR() * 0.7f + sr;
+            if (dx * dx + dy * dy < rr * rr) damagePlayer();
         }
     }
 
@@ -1456,10 +1506,11 @@ public class GameView extends View {
             return;
         }
         // do not waste a charge on an empty screen - that is also what a player would do
-        if (energy >= Tuning.ENERGY_MAX && enemies.size() >= 2) {
+        // a boss is worth a charge even on a sparse screen - that is what the skill is for
+        if (energy >= Tuning.ENERGY_MAX && (enemies.size() >= 2 || boss != null)) {
             fireSuper();
             autoSkillT = Tuning.AUTO_SKILL_GAP;
-        } else if (bombStock > 0 && enemies.size() >= Tuning.AUTO_BOMB_ENEMIES) {
+        } else if (bombStock > 0 && (enemies.size() >= Tuning.AUTO_BOMB_ENEMIES || boss != null)) {
             useBomb();
             autoSkillT = Tuning.AUTO_SKILL_GAP * 2f;
         }
@@ -1479,6 +1530,11 @@ public class GameView extends View {
         ring(x, y, col, r * 1.6f, dp(9));
         ring(x, y, Color.WHITE, r * 0.9f, dp(5));
         explode(x, y, col, 20, r * 0.5f);
+        // skills must hit the boss too, or a super blast feels useless on a boss screen
+        if (boss != null && bossEnter > 1.2f) {
+            float dx = bossX - x, dy = bossY - y;
+            if (dx * dx + dy * dy <= (r + bossR()) * (r + bossR())) boss.hurt(dmg);
+        }
         return killed;
     }
 
@@ -1505,6 +1561,7 @@ public class GameView extends View {
             if (e.hp <= 0) { killEnemy(e, i); killed++; }
         }
         ring(sx, sy, Color.rgb(255, 250, 220), (float) Math.hypot(W, H) * 0.8f, dp(12));
+        if (boss != null && bossEnter > 1.2f) boss.hurt(dmg);
         return killed;
     }
 
@@ -1769,6 +1826,7 @@ public class GameView extends View {
         drawBackground(c);
         drawPowers(c);
         drawEnemies(c);
+        drawBoss(c);
         drawBullets(c);
         drawParticles(c);
         drawSuperFx(c);
@@ -2183,7 +2241,222 @@ public class GameView extends View {
 
     // ------------------------------------------------------------------ hud
 
+    // ------------------------------------------------------------------- boss
+
+    float bossR() { return dp(boss.radiusDp()); }
+
+    int bossColor() { return boss.color(); }
+
+    void spawnBoss(int kind) {
+        if (boss != null || state != RUNNING) return;
+        boss = Boss.spawn(kind, diff, bossesKilled);
+        bossAlive = 1;
+        bossEnter = 0f;
+        bossHitFx = 0f;
+        bossX = W * 0.5f;
+        bossY = -bossR() - dp(20);
+        banner("BOSS 登场 · " + boss.name(), boss.sub());
+        audio.play(AudioFx.EVENT, 0.9f);
+        vibro.bomb();
+        shake = Math.max(shake, 14f);
+        Log.i(TAG, "boss spawn name=" + boss.name() + " hp=" + (int) boss.maxHp()
+                + " kind=" + boss.kind() + " phase=" + boss.phase()
+                + " gap=" + String.format(java.util.Locale.US, "%.2f",
+                Boss.maxGapSec(boss.phase(), diff))
+                + " n=" + (bossesKilled + 1));
+    }
+
+    private void updateBoss(float dt) {
+        if (boss == null) {
+            if (time >= nextBossAt) {
+                nextBossAt += 80f;
+                spawnBoss(bossesKilled);
+            }
+            return;
+        }
+        bossEnter += dt;
+        if (bossHitFx > 0) bossHitFx -= dt;
+        float slow = slowT > 0 ? 0.45f : 1f;
+        float home = topPad + dp(120);
+        if (bossEnter < 2f) {
+            // the entrance: slide down from above the top edge
+            bossY += (home - bossY) * Math.min(1f, 2.2f * dt);
+            bossX += (W * 0.5f - bossX) * Math.min(1f, 2.2f * dt);
+        } else {
+            bossX += (float) Math.sin(bossEnter * 0.7f) * dp(150) * dt * slow;
+            bossX = Math.max(bossR(), Math.min(W - bossR(), bossX));
+            float ty = home + (float) Math.sin(bossEnter * 1.6f) * dp(16);
+            bossY += (ty - bossY) * Math.min(1f, 3f * dt);
+        }
+        int room = D_CAP[diff] - enemies.size();
+        int req = boss.act(dt * slow, Math.max(0, room));
+        if ((req & Boss.ACT_DIE) != 0) { killBoss(); return; }
+        if ((req & Boss.ACT_RING) != 0) bossRing();
+        if ((req & Boss.ACT_AIM) != 0) bossAim();
+        if ((req & Boss.ACT_FAN) != 0) bossFan();
+        if ((req & Boss.ACT_SUMMON) != 0) bossSummon();
+    }
+
+    private void bossShot(float x, float y, float a, float sp, int color, float r) {
+        Bullet b = new Bullet();
+        b.x = x;
+        b.y = y;
+        b.vx = (float) Math.sin(a) * sp * D_SPEED[diff];
+        b.vy = (float) Math.cos(a) * sp * D_SPEED[diff];
+        b.r = r;
+        b.dmg = 1;
+        b.life = 7f;
+        b.color = color;
+        b.enemy = true;
+        ebullets.add(b);
+    }
+
+    /** phase 0: a full ring, rotated by the boss age */
+    private void bossRing() {
+        int n = boss.ringCount();
+        int col = bossColor();
+        for (int k = 0; k < n; k++)
+            bossShot(bossX, bossY, (float) (k * 2 * Math.PI / n) + boss.age(), dp(200), col, dp(6));
+        audio.play(AudioFx.SHOT, 0.7f);
+    }
+
+    /** phase 1+: a short aimed burst at the player */
+    private void bossAim() {
+        int n = boss.aimBurst();
+        float base = (float) Math.atan2(sx - bossX, sy - bossY);
+        for (int i = 0; i < n; i++)
+            bossShot(bossX, bossY, base + (i - (n - 1) * 0.5f) * 0.13f, dp(330),
+                    Color.rgb(255, 90, 90), dp(6));
+        audio.play(AudioFx.SHOT, 1.1f);
+    }
+
+    /** phase 2: a wide fan sweep downwards */
+    private void bossFan() {
+        int n = boss.fanCount();
+        for (int i = 0; i < n; i++) {
+            float a = (i - (n - 1) * 0.5f) * 0.19f;
+            bossShot(bossX, bossY, a, dp(260), Color.rgb(255, 170, 60), dp(7));
+        }
+        shake = Math.max(shake, 6f);
+        audio.play(AudioFx.WALL, 0.8f);
+    }
+
+    /** phase 2: spawn minions, capped by the on-screen enemy cap so no wave is cut in half */
+    private void bossSummon() {
+        int n = boss.summonCount();
+        int room = D_CAP[diff] - enemies.size();
+        if (n <= 0) {
+            Log.i(TAG, "boss summon n=0 room=" + room + " cap=" + D_CAP[diff]);
+            return;
+        }
+        for (int i = 0; i < n; i++)
+            spawnEnemy(0, bossX + (i - (n - 1) * 0.5f) * dp(46));
+        Log.i(TAG, "boss summon n=" + n + " room=" + room + " cap=" + D_CAP[diff]);
+        audio.play(AudioFx.PICK, 0.8f);
+    }
+
+    void hitBoss(Bullet b) {
+        bossHitFx = 0.08f;
+        for (int k = 0; k < 3; k++) spark(b.x, b.y, bossColor(), dp(150));
+        // the kill itself is handled by the ACT_DIE request next frame, so score and drops
+        // are paid out exactly once
+        if (boss.hurt(b.dmg)) {
+            audio.play(AudioFx.BIGKILL, 0.6f);
+            return;
+        }
+        if (rnd.nextInt(3) == 0) audio.play(AudioFx.HIT, 0.9f);
+    }
+
+    void killBoss() {
+        int pts = (int) (boss.score() * D_SCORE[diff] * comboMult());
+        scoreF += pts;
+        bossesKilled++;
+        bossAlive = 0;
+        ebullets.clear();
+        slowT = Math.max(slowT, 2.5f);      // the slow motion that sells the kill
+        bombSlow = 0.55f;
+        shake = Math.max(shake, 26f);
+        flashWhite = 0.9f;
+        audio.play(AudioFx.BIGKILL);
+        vibro.bomb();
+        banner("BOSS 击破 · " + boss.name(), "+" + pts + " 全屏清弹");
+        floatText(bossX, bossY, "+" + pts, GOLD, dp(26));
+        for (int k = 0; k < 26; k++) spark(bossX, bossY, bossColor(), dp(340));
+        ring(bossX, bossY, bossColor(), dp(200), dp(6));
+        // a boss always pays out the goods
+        spawnPower(PW_WEAPON, bossX - dp(30), bossY);
+        spawnPower(PW_BOMB, bossX + dp(30), bossY);
+        spawnPower(PW_HEAL, bossX, bossY + dp(26));
+        Log.i(TAG, "boss killed name=" + boss.name() + " score=" + pts
+                + " phase=" + boss.phase() + " n=" + bossesKilled);
+        boss = null;
+    }
+
+    private void drawBoss(Canvas c) {
+        if (boss == null) return;
+        float r = bossR();
+        int col = bossHitFx > 0f ? Color.WHITE : bossColor();
+        float pulse = 0.5f + 0.5f * (float) Math.sin(bossEnter * 3f);
+        glow(c, bossX, bossY, r * 1.7f, col, 0.30f + 0.12f * pulse);
+        path.reset();
+        int sides = 6 + boss.kind() * 2;
+        for (int i = 0; i < sides; i++) {
+            double a = Math.PI * 2 * i / sides + Math.PI / 2;
+            float rr = r * (i % 2 == 0 ? 1f : 0.72f);
+            float x = bossX + (float) Math.cos(a) * rr;
+            float y = bossY + (float) Math.sin(a) * rr;
+            if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        }
+        path.close();
+        paint.setColor(Color.argb(225, Color.red(col), Color.green(col), Color.blue(col)));
+        c.drawPath(path, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(dp(3));
+        paint.setColor(Color.WHITE);
+        c.drawPath(path, paint);
+        paint.setStyle(Paint.Style.FILL);
+        // core lights, one per phase, the active one lit
+        for (int i = 0; i < Boss.PHASES; i++) {
+            int cc = i <= boss.phase() ? Color.rgb(255, 240, 180) : Color.rgb(60, 70, 90);
+            c.drawCircle(bossX + (i - 1) * dp(16), bossY, dp(5), paint);
+            paint.setColor(cc);
+            c.drawCircle(bossX + (i - 1) * dp(16), bossY, dp(4), paint);
+            paint.setColor(col);
+        }
+    }
+
+    /** the big health bar, drawn under topPad so it never covers the HUD pills */
+    private void drawBossBar(Canvas c) {
+        if (boss == null) return;
+        float m = dp(14);
+        float w = W - m * 2;
+        float y = topPad + dp(34);
+        float h = dp(12);
+        paint.setColor(Color.argb(150, 10, 14, 26));
+        c.drawRoundRect(new RectF(m, y, m + w, y + h), dp(6), dp(6), paint);
+        float frac = Math.max(0f, Math.min(1f, boss.hpFrac()));
+        int col = boss.phase() == 0 ? Color.rgb(255, 90, 90)
+                : boss.phase() == 1 ? Color.rgb(255, 170, 60) : Color.rgb(255, 60, 200);
+        paint.setColor(col);
+        if (frac > 0f)
+            c.drawRoundRect(new RectF(m, y, m + w * frac, y + h), dp(6), dp(6), paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(dp(1));
+        paint.setColor(Color.argb(180, 255, 255, 255));
+        c.drawRoundRect(new RectF(m, y, m + w, y + h), dp(6), dp(6), paint);
+        paint.setStyle(Paint.Style.FILL);
+        // phase ticks
+        for (int i = 1; i < Boss.PHASES; i++) {
+            float x = m + w * Boss.PHASE_AT[i];
+            paint.setColor(Color.argb(200, 255, 255, 255));
+            c.drawRect(x, y, x + dp(1), y + h, paint);
+        }
+        text(c, boss.name(), m + dp(4), y + h + dp(13), dp(12), col, 0);
+        text(c, (int) (frac * 100) + "%", m + w - dp(4), y + h + dp(13), dp(12), TXT_DIM, 2);
+    }
+
     private void drawHud(Canvas c) {
+        drawBossBar(c);
         float m = dp(14);
         text(c, "得分", m, topPad - dp(18), dp(12), TXT_DIM, 0);
         text(c, String.valueOf(score), m, topPad + dp(12), dp(30), TXT, 0);
