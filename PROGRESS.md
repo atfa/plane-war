@@ -72,6 +72,20 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
+## 当前状态（步骤 3 REVIEW，上下文即将压缩）
+
+- Austin HEAD `84c06a6`（ahead 6，worktree 干净）；Tony HEAD `ee026e9`（dirty，正在改）。
+- 我审查 Tony 的 `ee026e9`：Boss.java 是他那份的旧拷贝（add/add 冲突，**INTEGRATE 以我的为准**：
+  HP `{80,110,140}`、`summonCount()`/`summonCount(int)`、`act(float)` 重载、`maxGapSec`）。
+- **未解决（已 duo_send 给 Tony，所以我没签 REVIEW）**：他的 `test/TestBoss.java:114`
+  `ok(b.act(0.1f) == 0, "a dead boss requests nothing")` 与最终语义冲突 —— 死亡后第一次
+  `act()` 必须返回一次 `ACT_DIE`（GameView 靠它走 `killBoss()` 发分/掉落），之后恒 0。
+  修法已发他：先断言 `(act(0.1f,20) & ACT_DIE) != 0`，再断言后续恒 0。
+  他改完后：合并 Boss.java 取我的 + 把 `test/TestBoss.java` 加进 test_jvm.sh 的 SRC 与运行行
+  （我本地验证过：修好 114 行后 TestLogic 527 项 + TestBoss 43887 项可一起跑）。
+- 我本地验收（不含 TestBoss）：`./test_jvm.sh` 527 项全绿；`DIFF=1 ./test.sh` 连续两轮 PASS。
+
+
 ## 步骤 3 已落地（BOSS）
 
 - `Boss.java`（纯 Java）：3 种轮换 `pick()`、`hpFor(kind,diff)=HP[]×(1+0.35d)`（再 ×(1+0.25×已击杀数)）、
