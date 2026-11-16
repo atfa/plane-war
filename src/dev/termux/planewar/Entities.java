@@ -6,6 +6,7 @@ class Bullet {
     float life;
     int color;
     boolean enemy;
+    float grazeT;         // graze cooldown, so one bullet cannot be farmed every frame
 }
 
 class Enemy {
@@ -20,6 +21,7 @@ class Enemy {
     int color;
     int flash;            // white flash frames after a hit
     int hover;            // 0 = descending, 1 = in attack pattern
+    boolean swept;        // already hit by the current 大地裂变 quake wave
 }
 
 class PowerUp {

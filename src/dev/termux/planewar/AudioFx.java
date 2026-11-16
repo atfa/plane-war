@@ -24,11 +24,11 @@ public class AudioFx {
 
     public static final String SHOT = "shot", HIT = "hit", KILL = "kill", BIGKILL = "bigkill",
             POWER = "power", SHIELD = "shield", BOMB = "bomb", HURT = "hurt", OVER = "over",
-            EVENT = "event", PICK = "pick", START = "start", WALL = "wall";
+            EVENT = "event", PICK = "pick", START = "start", WALL = "wall", SUPER = "super";
 
     private static final String TAG = "planewar";
     private static final int RATE = 22050;
-    private static final String VER = "v3";
+    private static final String VER = "v4";
 
     private final Context ctx;
     private final HashMap<String, Integer> ids = new HashMap<String, Integer>();
@@ -134,7 +134,7 @@ public class AudioFx {
                     }
                 }
             });
-            String[] names = {SHOT, HIT, KILL, BIGKILL, POWER, SHIELD, BOMB, HURT, OVER, EVENT, PICK, START, WALL};
+            String[] names = {SHOT, HIT, KILL, BIGKILL, POWER, SHIELD, BOMB, HURT, OVER, EVENT, PICK, START, WALL, SUPER};
             for (String n : names) {
                 File f = new File(dir, "sfx_" + n + "_" + VER + ".wav");
                 if (!f.exists()) writeWav(f, sfx(n, RATE), RATE);
@@ -225,6 +225,15 @@ public class AudioFx {
             b = new float[(int) (rate * 0.09)];
             noise(b, rate, 0, 0.05, 0.10, 0.35);
             sweep(b, rate, 0, 0.05, 700, 300, 0.06, Wave.SQUARE);
+        } else if (name.equals(SUPER)) {
+            // rising sweep, a sub drop, a bright arpeggio and a noise crack
+            b = new float[(int) (rate * 1.2)];
+            sweep(b, rate, 0, 0.45, 180, 1500, 0.24, Wave.SAW);
+            sweep(b, rate, 0.18, 0.7, 110, 34, 0.32, Wave.SINE);
+            int[] n = {659, 784, 988, 1319, 1568};
+            for (int i = 0; i < n.length; i++)
+                tone(b, rate, 0.26 + i * 0.06, 0.30, n[i], 0.15, Wave.TRIANGLE);
+            noise(b, rate, 0.26, 0.7, 0.20, 0.55);
         } else {
             b = new float[(int) (rate * 0.1)];
         }

@@ -40,6 +40,10 @@ public class MainActivity extends Activity {
             if (spawn >= 0) view.hookSpawn(spawn);
             int ev = b.getInt("event", -1);
             if (ev >= 0) view.hookEvent(ev);
+            int sup = b.getInt("super", 0);
+            if (sup > 0) view.hookSuper(sup);
+            int bomb = b.getInt("bomb", 0);
+            if (bomb > 0) view.hookBomb(bomb);
             int die = b.getInt("autodie", 0);
             if (die > 0) view.setAutoDie(die);
             if (b.containsKey("vibrate")) view.setVibe(b.getBoolean("vibrate", true));

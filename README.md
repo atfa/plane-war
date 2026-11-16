@@ -6,7 +6,12 @@
 
 * **机头始终朝上**，屏幕任意位置**拖动**即可让飞机上下左右移动（不用点到飞机）。
 * 松手后飞机滑行一小段距离停下；飞机碰到屏幕边缘会停下并贴边。
-* 飞机自动开火，无需按键。
+* 飞机自动开火，无需按键；战场底部两角是两枚**主动技能**按钮。
+* **能量超必杀**（右下「超」按钮）：击杀敌机与时间都会充能，满 100 释放全屏超必杀，
+  5 种随机主题：烈焰流星（三连流星爆）/ 万雷齐鸣（六道雷柱）/ 圣光普照（全场清 +1 命）/
+  大地裂变（地裂波自下而上）/ 冰封万里（全场冰封 4 秒）。任何主题都会清空全屏敌弹。
+* **炸弹库存**（左下「炸」按钮）：开局 1 颗，上限 3，吃「爆」道具 +1（满了就加分）；
+  自己选时机引爆，清弹 + 全场伤害。
 * 拾取掉落道具：火力 / 护盾 / 维修 / 炸弹 / 加分 / 速射。
 * 敌人：杂兵、俯冲机、炮艇、精英、重型轰炸机（小 boss）。
 * 随机事件：敌袭、狂暴、EMP、道具雨、缓速场、重型轰炸机登场。
@@ -77,24 +82,36 @@ cd ~/fix/plane
 ## 自动化测试
 
 ```sh
-./test.sh
+./test_jvm.sh       # JVM 单测：纯逻辑类（Tuning/Super），无需手机，~2s
+./build.sh          # -> plane.apk
+DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 ```
+
+`test_jvm.sh` 只编译不 import Android 的纯逻辑类（`Tuning.java`、`Super.java` …）+ `test/TestLogic.java`；
+新玩法的数值一律先进这些类，保证能在 JVM 上断言。
 
 用 intent 参数驱动游戏，不需要点击屏幕：
 
 | 参数 | 作用 |
 |------|------|
 | `--ez autostart true` | 直接进入游戏 |
-| `--ez autopilot true` | 自动闪避、自动瞄准 |
+| `--ez autopilot true` | 自动闪避、自动瞄准，**并且会放超必杀/炸弹**（与手动同一个入口） |
 | `--ez god true` | 不会掉血 |
 | `--ei report N` | 每 N 秒打印一次 `stats` |
 | `--ei autodie S` | 飞行 S 秒后坠毁（触发结算/排行榜） |
 | `--ei diff N` | 0 简单 / 1 普通 / 2 困难，例如 `DIFF=2 ./test.sh` |
+| `--ei super N` | 本局内自动释放 N 次超必杀（日志 `super name=…`） |
+| `--ei bomb N` | 本局内自动引爆 N 颗炸弹（日志 `bomb n=…`） |
 
-测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、音效 → 重启并检查
-排行榜从磁盘读回（`loaded best=`）。日志：`su -c "logcat -d -s planewar:V"`。
+测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**超必杀与炸弹日志**、
+**帧率**（`stats` 行的 `fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
+`stats` 行形如
+`stats t=12 score=2427 kills=11 weapon=1 lives=3 enemies=1 energy=37 bomb=0 graze=0 fever=0 boss=0 fps=60.2`。
+日志：`su -c "logcat -d -s planewar:V"`。
 
-注意：游戏循环由 vsync 驱动，屏幕熄灭后不刷新，所以测试脚本会周期性发送 `KEYCODE_WAKEUP`。
+注意：游戏循环由 vsync 驱动，屏幕熄灭后不刷新；这台手机 30s 就息屏，而 DeX 窗口下
+`KEYCODE_WAKEUP` 不总能把画面拉回来，所以 `test.sh` 会把 `stay_on_while_plugged_in` 临时设为 7，
+退出时（含失败）自动还原原值。
 
 ## 截图检查
 
@@ -113,11 +130,14 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 
 | 文件 | 说明 |
 |------|------|
-| `src/dev/termux/planewar/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子 |
+| `src/dev/termux/planewar/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
 | `src/dev/termux/planewar/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
-| `src/dev/termux/planewar/AudioFx.java` | 运行时合成 13 种音效 + 循环芯片音乐 |
+| `src/dev/termux/planewar/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
+| `src/dev/termux/planewar/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
+| `src/dev/termux/planewar/AudioFx.java` | 运行时合成 14 种音效 + 循环芯片音乐 |
 | `src/dev/termux/planewar/Vibro.java` | 震动封装（API 24 / 31+） |
 | `src/dev/termux/planewar/Scores.java` | 本地排行榜（SharedPreferences） |
 | `src/dev/termux/planewar/Entities.java` | 子弹/敌人/道具/粒子数据类 |
+| `test/TestLogic.java` + `test_jvm.sh` | 纯逻辑类的 JVM 断言（无需手机） |
 | `gen_icon.py` | 生成各密度启动图标 |
 | `view.py` / `check.py` / `crop.py` | 截图 ASCII 预览 / 颜色校验 / 区域放大 |

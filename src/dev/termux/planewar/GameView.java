@@ -135,6 +135,26 @@ public class GameView extends View {
     String banner = "", bannerSub = "";
     float bannerT;
 
+    // ---- player active skills: the energy super blast and the bomb stock ----
+    // The plane used to have no verb at all (drag + auto fire); these two give the player
+    // a panic button with a charge-up, and a stock they choose when to spend.
+    float energy;
+    int bombStock, superCount, bombFired;
+    int superTheme = -1;
+    String superName = "";
+    float superFxT;               // banner/glow timer of the last super blast
+    float freezeT;                // 冰封万里: enemies are frozen for this long
+    float quakeY;                 // 大地裂变: the wave travels up from here
+    boolean quakeOn;
+    final float[] boltX = new float[Super.COUNT];   // 万雷齐鸣 columns (visual)
+    final float[] boltT = new float[Super.COUNT];
+    int graze, bossAlive;         // reported in the periodic stats line
+    int superHook, bombHook;      // test hooks: fire the skill N times during a run
+    float autoSkillT;             // autopilot skill throttle
+    float fpsAvg = 60f, fpsAcc;
+    int fpsFrames;
+    final RectF btnSuper = new RectF(), btnBomb = new RectF();
+
     // options
     boolean musicOn = true, soundOn = true, vibrateOn = true;
     int sensIdx = SENS_STD;
@@ -271,6 +291,20 @@ public class GameView extends View {
         shake = flashRed = flashWhite = flashCyan = vignette = 0;
         bannerT = 0;
         timeScale = 1f;
+        energy = 0f;
+        bombStock = Tuning.BOMB_START;
+        superCount = 0;
+        bombFired = 0;
+        superTheme = -1;
+        superName = "";
+        superFxT = 0f;
+        freezeT = 0f;
+        quakeOn = false;
+        quakeY = 0f;
+        graze = 0;
+        bossAlive = 0;
+        autoSkillT = 0f;
+        for (int i = 0; i < Super.COUNT; i++) boltT[i] = 0f;
         if (W > 0) {
             sx = W / 2f;
             sy = H * 0.72f;
@@ -335,6 +369,10 @@ public class GameView extends View {
     void setAutopilot(boolean b) { autopilot = b; }
     void setGod(boolean b) { godMode = b; }
     void setReport(int sec) { reportSec = sec; }
+
+    /** test hooks: fire the super blast / the bomb N times during the run (same code path) */
+    void hookSuper(int n) { superHook = n; }
+    void hookBomb(int n) { bombHook = n; }
 
     void hookPower(int kind) {
         PowerUp p = new PowerUp();
@@ -407,8 +445,13 @@ public class GameView extends View {
         }
     }
 
-    /** Taps are only used for the menus - never needed during play. */
+    /** Taps are used for the menus and for the two skill buttons during play. */
     private void onTap(float x, float y) {
+        if (state == RUNNING) {
+            if (btnSuper.contains(x, y)) { fireSuper(); return; }
+            if (btnBomb.contains(x, y)) { useBomb(); return; }
+            return;
+        }
         if (state == TITLE || state == PAUSED) {
             for (int i = 0; i < btnSens.length; i++)
                 if (btnSens[i].contains(x, y)) { setSens(i); return; }
@@ -503,6 +546,14 @@ public class GameView extends View {
             updateParticles(dt);
             decayFx(dt);
         }
+        // rolling frame-rate average, reported in the stats line and asserted by test.sh
+        fpsAcc += dt;
+        fpsFrames++;
+        if (fpsAcc >= 1f) {
+            fpsAvg = fpsFrames / fpsAcc;
+            fpsAcc = 0f;
+            fpsFrames = 0;
+        }
         render(c);
         postInvalidateOnAnimation();
     }
@@ -522,8 +573,31 @@ public class GameView extends View {
         if (reportSec > 0 && time - lastReport >= reportSec) {
             lastReport = time;
             Log.i(TAG, "stats t=" + (int) time + " score=" + score + " kills=" + kills
-                    + " weapon=" + weapon + " lives=" + lives + " enemies=" + enemies.size());
+                    + " weapon=" + weapon + " lives=" + lives + " enemies=" + enemies.size()
+                    + " energy=" + (int) energy + " bomb=" + bombStock + " graze=" + graze
+                    + " fever=" + (feverActive() ? 1 : 0) + " boss=" + bossAlive
+                    + " fps=" + String.format(java.util.Locale.US, "%.1f", fpsAvg));
         }
+
+        // test hooks: force the skills during a short autopilot run (same entry points)
+        if (superHook > 0 && time > 5f) {
+            superHook--;
+            energy = Tuning.ENERGY_MAX;
+            fireSuper();
+        }
+        if (bombHook > 0 && time > 8f) {
+            bombHook--;
+            useBomb();
+        }
+
+        // passive charge: a run always earns at least one super blast
+        energy = Math.min(Tuning.ENERGY_MAX, energy + Tuning.energyPerSec(diff) * dt);
+        if (superFxT > 0) superFxT -= dt;
+        if (freezeT > 0) freezeT -= dt;
+        for (int i = 0; i < Super.COUNT; i++)
+            if (boltT[i] > 0) boltT[i] -= dt;
+        if (quakeOn) updateQuake(dt);
+        if (autopilot) autoSkill(dt);
 
         if (autoDie > 0 && time > autoDie) {
             autoDie = 0;
@@ -632,7 +706,7 @@ public class GameView extends View {
             p.vy = dp(110) + Math.abs(vy) * 0.1f;
             p.life = p.max = 0.3f + rnd.nextFloat() * 0.16f;
             p.size = dp(5) + rnd.nextFloat() * dp(4);
-            p.color = frenzyT > 0 ? Color.rgb(255, 140, 70) : Color.rgb(90, 200, 255);
+            p.color = frenzyT > 0 || feverActive() ? Color.rgb(255, 140, 70) : Color.rgb(90, 200, 255);
             parts.add(p);
         }
     }
@@ -674,6 +748,7 @@ public class GameView extends View {
     private void fire(float dt) {
         fireTimer -= dt;
         float gap = rapidT > 0 || frenzyT > 0 ? 0.065f : 0.135f;
+        if (feverActive()) gap *= Tuning.FEVER_FIRE_RATE;
         if (fireTimer > 0) return;
         fireTimer = gap;
 
@@ -932,6 +1007,7 @@ public class GameView extends View {
 
     private void moveEnemies(float dt) {
         float slow = slowT > 0 ? 0.45f : 1f;
+        if (freezeT > 0) slow = 0f;              // 冰封万里: everything stops in place
         for (int i = enemies.size() - 1; i >= 0; i--) {
             Enemy e = enemies.get(i);
             e.t += dt * slow;
@@ -1104,6 +1180,7 @@ public class GameView extends View {
         combo++;
         if (combo > maxCombo) maxCombo = combo;
         comboT = 2.4f;
+        energy = Math.min(Tuning.ENERGY_MAX, energy + Tuning.killEnergy(e.type));
         float mult = comboMult();
         int pts = (int) (e.score * mult * D_SCORE[diff]);
         scoreF += pts;
@@ -1139,7 +1216,8 @@ public class GameView extends View {
     }
 
     float comboMult() {
-        return 1f + Math.min(combo, 40) * 0.05f;
+        float m = 1f + Math.min(combo, 40) * 0.05f;
+        return feverActive() ? m * Tuning.FEVER_SCORE_MULT : m;
     }
 
     private void collect(PowerUp p) {
@@ -1162,8 +1240,14 @@ public class GameView extends View {
                 floatText(sx, sy - dp(40), "生命 +1", powerColor(PW_HEAL), dp(19));
                 break;
             case PW_BOMB:
-                floatText(sx, sy - dp(40), "炸弹！", powerColor(PW_BOMB), dp(20));
-                bomb(false);
+                if (bombStock < Tuning.BOMB_MAX) {
+                    bombStock++;
+                    floatText(sx, sy - dp(40), "炸弹 +1 (" + bombStock + ")", powerColor(PW_BOMB), dp(20));
+                } else {
+                    scoreF += Tuning.BOMB_FULL_SCORE;
+                    floatText(sx, sy - dp(40), "炸弹已满 +" + Tuning.BOMB_FULL_SCORE,
+                            powerColor(PW_SCORE), dp(18));
+                }
                 break;
             case PW_SCORE: {
                 int pts = (int) (600 * comboMult());
@@ -1178,6 +1262,187 @@ public class GameView extends View {
         }
     }
 
+    // ------------------------------------------------------------------ active skills
+
+    /** true when the combo is deep enough to be in fever (score x2, faster guns) */
+    boolean feverActive() {
+        return combo >= Tuning.FEVER_COMBO;
+    }
+
+    /**
+     * The super blast: spends a full energy bar, picks one of five themes and shreds the
+     * screen. Called by the HUD button, the test hook and the autopilot - one code path.
+     */
+    void fireSuper() {
+        if (state != RUNNING) return;
+        if (energy < Tuning.ENERGY_MAX) {
+            floatText(sx, sy - dp(40), "能量不足", TXT_DIM, dp(15));
+            audio.play(AudioFx.PICK, 0.7f);
+            return;
+        }
+        energy = 0f;
+        superCount++;
+        int theme = Super.pick(rnd);
+        superTheme = theme;
+        superName = Super.name(theme);
+        superFxT = 1.1f;
+        float dmg = Super.damage(theme, diff);
+        banner("超必杀 · " + superName, Super.SUB[theme]);
+        audio.play(AudioFx.SUPER);
+        vibro.bomb();
+        flashWhite = 0.7f;
+        flashCyan = 0.6f;
+        shake = Math.max(shake, 18f);
+        if (Super.clearsBullets(theme)) ebullets.clear();
+
+        int killed = 0;
+        switch (theme) {
+            case Super.METEOR: {
+                // three meteor impacts on random enemies
+                for (int i = 0; i < Super.impacts(theme); i++) {
+                    Enemy t = enemies.isEmpty() ? null
+                            : enemies.get(rnd.nextInt(enemies.size()));
+                    float x = t != null ? t.x : W * (0.2f + rnd.nextFloat() * 0.6f);
+                    float y = t != null ? t.y : H * 0.3f;
+                    killed += blast(x, y, dp(Super.radiusDp(theme)), dmg,
+                            Color.rgb(255, 130, 50));
+                }
+                break;
+            }
+            case Super.LIGHTNING: {
+                // six vertical bolt columns
+                for (int i = 0; i < Super.impacts(theme); i++) {
+                    float x = dp(20) + rnd.nextFloat() * (W - dp(40));
+                    boltX[i] = x;
+                    boltT[i] = 0.45f;
+                    killed += boltHit(x, dp(Super.radiusDp(theme)), dmg);
+                }
+                shake = Math.max(shake, 22f);
+                break;
+            }
+            case Super.HOLY: {
+                killed += damageAll(dmg);
+                if (Super.heals(theme) && lives < 5) {
+                    lives++;
+                    floatText(sx, sy - dp(58), "生命 +1", powerColor(PW_HEAL), dp(19));
+                }
+                flashWhite = 1f;
+                break;
+            }
+            case Super.QUAKE: {
+                // the wave travels up the screen and cuts everything it passes (updateQuake)
+                quakeOn = true;
+                quakeY = H + dp(20);
+                for (Enemy e : enemies) e.swept = false;
+                break;
+            }
+            default: {
+                killed += damageAll(dmg);
+                if (Super.freezes(theme)) {
+                    freezeT = Super.freezeSeconds();
+                    flashCyan = 1f;
+                }
+                break;
+            }
+        }
+        float pts = Tuning.superScore(diff) * (1f + killed * 0.25f);
+        scoreF += pts;
+        floatText(sx, sy - dp(76), "+" + (int) pts, Super.color(theme), dp(22));
+        Log.i(TAG, "super name=" + superName + " theme=" + theme + " killed=" + killed
+                + " dmg=" + (int) dmg + " n=" + superCount);
+    }
+
+    /** player bomb: spends one bomb from the stock (the EMP event keeps its own path) */
+    void useBomb() {
+        if (state != RUNNING) return;
+        if (bombStock <= 0) {
+            floatText(sx, sy - dp(40), "没有炸弹", TXT_DIM, dp(15));
+            audio.play(AudioFx.PICK, 0.7f);
+            return;
+        }
+        bombStock--;
+        bombFired++;
+        bomb(false);
+        Log.i(TAG, "bomb n=" + bombStock + " fired=" + bombFired + " enemies=" + enemies.size());
+    }
+
+    /** the autopilot uses the same skills, so the automated playtest covers them */
+    private void autoSkill(float dt) {
+        if (autoSkillT > 0) {
+            autoSkillT -= dt;
+            return;
+        }
+        // do not waste a charge on an empty screen - that is also what a player would do
+        if (energy >= Tuning.ENERGY_MAX && enemies.size() >= 2) {
+            fireSuper();
+            autoSkillT = Tuning.AUTO_SKILL_GAP;
+        } else if (bombStock > 0 && enemies.size() >= Tuning.AUTO_BOMB_ENEMIES) {
+            useBomb();
+            autoSkillT = Tuning.AUTO_SKILL_GAP * 2f;
+        }
+    }
+
+    /** damage every enemy within r of (x,y); @return how many died */
+    private int blast(float x, float y, float r, float dmg, int col) {
+        int killed = 0;
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy e = enemies.get(i);
+            float dx = e.x - x, dy = e.y - y;
+            if (dx * dx + dy * dy > r * r) continue;
+            e.hp -= dmg;
+            e.flash = 5;
+            if (e.hp <= 0) { killEnemy(e, i); killed++; }
+        }
+        ring(x, y, col, r * 1.6f, dp(9));
+        ring(x, y, Color.WHITE, r * 0.9f, dp(5));
+        explode(x, y, col, 20, r * 0.5f);
+        return killed;
+    }
+
+    /** damage every enemy within a vertical strip at x (万雷齐鸣) */
+    private int boltHit(float x, float r, float dmg) {
+        int killed = 0;
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy e = enemies.get(i);
+            if (Math.abs(e.x - x) > r + e.r) continue;
+            e.hp -= dmg;
+            e.flash = 5;
+            if (e.hp <= 0) { killEnemy(e, i); killed++; }
+        }
+        return killed;
+    }
+
+    /** damage every enemy on screen (圣光普照 / 冰封万里) */
+    private int damageAll(float dmg) {
+        int killed = 0;
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy e = enemies.get(i);
+            e.hp -= dmg;
+            e.flash = 5;
+            if (e.hp <= 0) { killEnemy(e, i); killed++; }
+        }
+        ring(sx, sy, Color.rgb(255, 250, 220), (float) Math.hypot(W, H) * 0.8f, dp(12));
+        return killed;
+    }
+
+    /** 大地裂变: a wave sweeps from the bottom edge to the top, cutting what it passes */
+    private void updateQuake(float dt) {
+        quakeY -= dp(1500f) * dt;
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy e = enemies.get(i);
+            if (e.swept || e.y < quakeY) continue;
+            e.swept = true;
+            e.hp -= Super.damage(Super.QUAKE, diff);
+            e.flash = 5;
+            if (e.hp <= 0) killEnemy(e, i);
+        }
+        if (rnd.nextFloat() < 0.9f) {
+            float x = rnd.nextFloat() * W;
+            spark(x, quakeY + (rnd.nextFloat() * 2 - 1) * dp(10), Color.rgb(220, 170, 100), dp(200));
+        }
+        if (quakeY < -dp(30)) quakeOn = false;
+    }
+
     /** clears enemy bullets and shreds everything on screen (emp = stronger) */
     private void bomb(boolean emp) {
         audio.play(AudioFx.BOMB);
@@ -1188,7 +1453,7 @@ public class GameView extends View {
         ring(sx, sy, Color.WHITE, (float) Math.hypot(W, H), dp(16));
         ring(sx, sy, Color.rgb(120, 220, 255), (float) Math.hypot(W, H) * 0.7f, dp(10));
         ebullets.clear();
-        float dmg = emp ? 60f : 26f;
+        float dmg = (emp ? 60f : Tuning.bombDamage(diff)) * (emp ? 1f : 1f);
         for (int j = enemies.size() - 1; j >= 0; j--) {
             Enemy e = enemies.get(j);
             e.hp -= dmg;
@@ -1422,6 +1687,7 @@ public class GameView extends View {
         drawEnemies(c);
         drawBullets(c);
         drawParticles(c);
+        drawSuperFx(c);
         if (state != OVER) drawShip(c);
         drawTexts(c);
         c.restore();
@@ -1521,7 +1787,8 @@ public class GameView extends View {
         if (state == RUNNING || state == PAUSED) {
             float s = dp(16);
             float blink = invuln > 0 ? (0.45f + 0.55f * (float) Math.abs(Math.sin(time * 22f))) : 1f;
-            glow(c, sx, sy, s * 3.1f, frenzyT > 0 ? Color.rgb(255, 150, 70) : SHIP, 0.5f * blink);
+            glow(c, sx, sy, s * 3.1f,
+                    frenzyT > 0 || feverActive() ? Color.rgb(255, 150, 70) : SHIP, 0.5f * blink);
             c.save();
             c.translate(sx, sy);
             c.rotate((float) Math.toDegrees(bank));
@@ -1588,6 +1855,7 @@ public class GameView extends View {
         for (int i = 0; i < enemies.size(); i++) {
             Enemy e = enemies.get(i);
             int col = e.flash > 0 ? Color.WHITE : e.color;
+            if (freezeT > 0 && e.flash <= 0) col = Color.rgb(150, 220, 250);   // 冰封万里
             glow(c, e.x, e.y, e.r * 2.2f, e.color, 0.35f);
             c.save();
             c.translate(e.x, e.y);
@@ -1792,6 +2060,33 @@ public class GameView extends View {
         paint.setStyle(Paint.Style.FILL);
     }
 
+    /** the visual aftermath of a super blast: bolt columns and the quake wave */
+    private void drawSuperFx(Canvas c) {
+        for (int i = 0; i < Super.COUNT; i++) {
+            if (boltT[i] <= 0f) continue;
+            float k = boltT[i] / 0.45f;
+            float w = dp(9) * k;
+            paint.setColor(Color.rgb(190, 230, 255));
+            paint.setAlpha((int) (200 * k));
+            c.drawRect(boltX[i] - w / 2, 0, boltX[i] + w / 2, H, paint);
+            paint.setColor(Color.WHITE);
+            paint.setAlpha((int) (255 * k));
+            c.drawRect(boltX[i] - w / 6, 0, boltX[i] + w / 6, H, paint);
+            paint.setAlpha(255);
+            glow(c, boltX[i], H * 0.5f, dp(90) * k, Color.rgb(150, 210, 255), 0.5f * k);
+        }
+        if (quakeOn) {
+            float h = dp(26);
+            paint.setColor(Color.rgb(230, 170, 90));
+            paint.setAlpha(190);
+            c.drawRect(0, quakeY - h / 2, W, quakeY + h / 2, paint);
+            paint.setColor(Color.rgb(255, 230, 170));
+            paint.setAlpha(255);
+            c.drawRect(0, quakeY - h / 6, W, quakeY + h / 6, paint);
+            glow(c, W / 2f, quakeY, W * 0.7f, Color.rgb(240, 180, 100), 0.5f);
+        }
+    }
+
     private void drawTexts(Canvas c) {
         for (int i = 0; i < texts.size(); i++) {
             FloatText t = texts.get(i);
@@ -1833,6 +2128,9 @@ public class GameView extends View {
         py = pill(c, py, slowT > 0, "缓速场", slowT, powerColor(PW_SHIELD));
         py = pill(c, py, shield > 0, "护盾 " + shield, -1, powerColor(PW_SHIELD));
         py = pill(c, py, weapon >= MAX_WEAPON, "火力全开", -1, powerColor(PW_WEAPON));
+        py = pill(c, py, feverActive(), "连击狂热 x2", -1, GOLD);
+        py = pill(c, py, freezeT > 0, "冰封", freezeT, powerColor(PW_SHIELD));
+        py = pill(c, py, bombStock >= Tuning.BOMB_MAX, "炸弹满仓", -1, powerColor(PW_BOMB));
 
         if (combo >= 2) {
             float k = Math.min(1f, comboT / 0.4f);
@@ -1848,6 +2146,62 @@ public class GameView extends View {
         float by = H - botPad - dp(6);
         text(c, "时间 " + mm + "   击坠 " + kills, m, by, dp(13), TXT_DIM, 0);
         text(c, DIFF_NAME[diff], W - m, by, dp(13), DIFF_COL[diff], 2);
+
+        drawSkillButtons(c);
+    }
+
+    /**
+     * The two active-skill buttons, bottom corners of the play field: the energy super blast
+     * on the right (the ring fills as it charges), the bomb stock on the left. Everything is
+     * drawn inside the circle so nothing collides with the "时间 / 击坠" line - the DeX window
+     * is only 865px tall, so the HUD has no room to spare.
+     */
+    private void drawSkillButtons(Canvas c) {
+        float r = dp(21);
+        float cy = H - botPad - r - dp(30);
+        btnSuper.set(W - r * 2 - dp(10), cy - r, W - dp(10), cy + r);
+        btnBomb.set(dp(10), cy - r, dp(10) + r * 2, cy + r);
+
+        // super blast: ring gauge + label, glows when ready
+        boolean ready = energy >= Tuning.ENERGY_MAX;
+        float pulse = ready ? 0.6f + 0.4f * (float) Math.sin(time * 7f) : 0f;
+        int col = superTheme >= 0 && superFxT > 0 ? Super.color(superTheme) : SHIP;
+        float cx = btnSuper.centerX();
+        paint.setColor(Color.rgb(8, 14, 26));
+        paint.setAlpha(210);
+        c.drawCircle(cx, cy, r, paint);
+        paint.setAlpha(255);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(dp(3));
+        paint.setColor(ready ? Color.rgb(255, 220, 120) : Color.rgb(70, 90, 120));
+        c.drawCircle(cx, cy, r, paint);
+        // the charge arc
+        paint.setColor(ready ? Color.rgb(255, 230, 140) : col);
+        rect.set(btnSuper.left, btnSuper.top, btnSuper.right, btnSuper.bottom);
+        c.drawArc(rect, -90f, 360f * Math.max(0f, Math.min(1f, energy / Tuning.ENERGY_MAX)),
+                false, paint);
+        paint.setStyle(Paint.Style.FILL);
+        if (ready) glow(c, cx, cy, r * 2.4f, Color.rgb(255, 210, 120), 0.3f + 0.25f * pulse);
+        text(c, ready ? "超" : "蓄", cx, cy - dp(2), r * 0.95f,
+                ready ? Color.rgb(255, 240, 190) : TXT_DIM, 1);
+        text(c, ready ? "就绪" : (int) (energy / Tuning.ENERGY_MAX * 100) + "%",
+                cx, cy + r * 0.72f, dp(10), ready ? GOLD : TXT_DIM, 1);
+
+        // bomb stock
+        float bx = btnBomb.centerX();
+        paint.setColor(Color.rgb(8, 14, 26));
+        paint.setAlpha(210);
+        c.drawCircle(bx, cy, r, paint);
+        paint.setAlpha(255);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(dp(2.4f));
+        paint.setColor(bombStock > 0 ? powerColor(PW_BOMB) : Color.rgb(70, 80, 100));
+        c.drawCircle(bx, cy, r, paint);
+        paint.setStyle(Paint.Style.FILL);
+        text(c, "炸", bx, cy - dp(2), r * 0.95f,
+                bombStock > 0 ? Color.rgb(255, 190, 170) : TXT_DIM, 1);
+        text(c, "x" + bombStock, bx, cy + r * 0.72f, dp(10),
+                bombStock > 0 ? powerColor(PW_BOMB) : TXT_DIM, 1);
     }
 
     private float pill(Canvas c, float y, boolean on, String label, float t, int col) {

@@ -29,7 +29,7 @@ public class Scores {
     }
 
     public static void saveLastName(Context c, String n) {
-        c.getSharedPreferences(PREF, 0).edit().putString(KEY_NAME, n).apply();
+        c.getSharedPreferences(PREF, 0).edit().putString(KEY_NAME, n).commit();
     }
 
     public static List<Entry> load(Context c) {
@@ -63,7 +63,9 @@ public class Scores {
               .append(e.kills).append('|').append(e.time).append('|').append(e.date)
               .append('|').append(e.diff);
         }
-        c.getSharedPreferences(PREF, 0).edit().putString(KEY, sb.toString()).apply();
+        // commit(), not apply(): the run ends right here and the harness (or the OS) may
+        // kill the process before an async write reaches the disk - the board must survive.
+        c.getSharedPreferences(PREF, 0).edit().putString(KEY, sb.toString()).commit();
     }
 
     public static int best(Context c) {
