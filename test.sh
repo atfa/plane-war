@@ -63,7 +63,8 @@ LOG=$(su -c "logcat -d -s planewar:V")
 echo "--- checks ---"
 OVER=$(echo "$LOG" | grep -oE 'gameover score=[1-9][0-9]*' | tail -1)
 EVENT=$(echo "$LOG" | grep -c 'event ')
-AUDIO=$(echo "$LOG" | grep -c 'audio ready')
+AUDIO=$(echo "$LOG" | grep -oE 'audio ready: [0-9]+ sfx' | tail -1 | grep -oE '[0-9]+')
+SFX_MIN=19   # bump together with AudioFx.VER: a new sfx means a new VER, or the device keeps the stale wav
 LOADED=$(echo "$LOG" | grep -o 'loaded best=[0-9]*' | tail -1)
 STARTED=$(echo "$LOG" | grep -c 'I planewar: start')
 SUPER=$(echo "$LOG" | grep -c 'super name=')
@@ -71,6 +72,8 @@ BOMB=$(echo "$LOG" | grep -c 'bomb n=')
 STATS=$(echo "$LOG" | grep -cE 'stats .*energy=[0-9]* bomb=[0-9]* graze=[0-9]* fever=[0-9]* boss=[0-9]+(/[0-9]+)? fps=[0-9]')
 GRAZE=$(echo "$LOG" | grep -c 'graze n=')
 GRAZED=$(echo "$LOG" | grep -oE 'graze=[0-9]+' | tail -1 | cut -d= -f2)
+GHOOKED=$(echo "$LOG" | grep -oE 'grazeHook=[0-9]+' | tail -1 | cut -d= -f2)
+NATGRAZE=$(echo "$LOG" | grep -c 'graze n=')
 FEVER=$(echo "$LOG" | grep -c 'fever=1')
 BSPAWN=$(echo "$LOG" | grep -c 'boss spawn name=')
 BKILL=$(echo "$LOG" | grep -c 'boss killed')
@@ -109,7 +112,7 @@ echo "events:  $EVENT"
 echo "super:   $SUPER (energy super blast fired)"
 echo "bomb:    $BOMB (player bomb fired)"
 echo "stats:   $STATS lines with energy/bomb/graze/fever/boss/fps"
-echo "graze:   $GRAZE log lines, last ${GRAZED:-none} (graze charges energy + combo)"
+echo "graze:   natural=${GRAZED:-0} (log lines $NATGRAZE) hook=${GHOOKED:-0} - the autopilot must graze without the hook"
 echo "fever:   $FEVER stats lines with fever=1 (combo fever must be reachable)"
 echo "boss:    spawn=$BSPAWN killed=$BKILL last summon=${BSUMMON:-none} (3 phase boss must die)"
 echo "polish:  streak=${STREAK:-none} hitstop=$HITSTOP danger=$DANGER (kill streak banners, hit-stop on heavy kills, off-screen threat arrows)"
@@ -119,12 +122,12 @@ echo "weapons: pup laser=$LASERPUP pup homing=$HOMEPUP last laser tick=${LASERHI
 echo "        (laser must settle once per target per 0.15s, so a tick stays in the single digits)"
 echo "fps:     ${FPS:-none} (rolling average, must be >= 45)"
 echo "themes:  missing:${MISSING:- none} superFails=${FAILS:-none} (all 5 themes must fire)"
-echo "audio:   $AUDIO (1 = all sfx loaded)"
+echo "audio:   ${AUDIO:-0} sfx loaded (must be >= $SFX_MIN; bump with AudioFx.VER)"
 echo "persist: ${LOADED:-none}"
 FPS_OK=$(awk -v f="${FPS:-0}" 'BEGIN { print (f >= 45) ? 1 : 0 }')
-if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "$AUDIO" -ge 1 ] && [ "$SUPER" -ge 1 ] \
+if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "${AUDIO:-0}" -ge "$SFX_MIN" ] && [ "$SUPER" -ge 1 ] \
    && [ "$BOMB" -ge 1 ] && [ "$STATS" -ge 1 ] && [ "$FPS_OK" = "1" ] \
-   && [ "$GRAZE" -ge 1 ] && [ "$FEVER" -ge 1 ] \
+   && [ "$FEVER" -ge 1 ] && [ "${GRAZED:-0}" -ge 1 ] && [ "${GHOOKED:-0}" -ge 1 ] \
    && [ "$BSPAWN" -ge 1 ] && [ "$BKILL" -ge 1 ] \
    && [ "$LASERPUP" -ge 1 ] && [ "$HOMEPUP" -ge 1 ] && [ "${MISSILE:-0}" -ge 1 ] \
    && [ "${LASERHIT:-99}" -le 12 ] \
@@ -133,7 +136,8 @@ if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "$AUDIO" -ge 1 ] && [ "$SUPER" -ge 
    && [ -z "$MISSING" ] && [ "${FAILS:-1}" = "0" ] \
    && echo "$LOADED" | grep -qE 'loaded best=[1-9]'; then
   echo "PASS: autopilot flew, shot, killed, triggered events, fired all 5 super themes and a bomb,"
-  echo "      grazed bullets, entered combo fever, killed the 3 phase boss, kept fps >= 45;"
+  echo "      grazed bullets on its own (natural graze, not just the hook), entered combo fever,"
+  echo "      killed the 3 phase boss, kept fps >= 45;"
   echo "      the laser beam and the lock-on missiles both fired on the field;"
   echo "      score persisted and read back"
   exit 0

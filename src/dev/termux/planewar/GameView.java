@@ -158,6 +158,7 @@ public class GameView extends View {
     float bossHookNext;
     boolean feverWas;             // rising edge detector for the fever banner
     int grazeHook;                // test hook: fire N grazes during a run
+    int grazeHooked;              // grazes produced by the hook, counted apart from real ones
     float grazeHookNext;
     int superHook, bombHook;      // test hooks: fire the skill N times during a run
     int superAll;                 // test hook: fire one super per theme, so all five get covered
@@ -319,6 +320,7 @@ public class GameView extends View {
         quakeOn = false;
         quakeY = 0f;
         graze = 0;
+        grazeHooked = 0;
         feverWas = false;
         bossAlive = 0;
         boss = null;
@@ -671,7 +673,7 @@ public class GameView extends View {
         if (grazeHook > 0 && time >= grazeHookNext) {
             grazeHookNext += 0.35f;
             grazeHook--;
-            grazeHit(sx + dp(34), sy - dp(10), Color.rgb(255, 120, 120));
+            grazeHit(sx + dp(34), sy - dp(10), Color.rgb(255, 120, 120), true);
         }
         // test hook: walk every theme in turn - a theme that throws kills the run, and the
         // test asserts all five names show up, so no theme can hide behind the random pick
@@ -864,8 +866,11 @@ public class GameView extends View {
             float d = (bossX - sx) * (bossX - sx) + (bossY - sy) * (bossY - sy);
             if (d < be * 2.5f) { tx = bossX; ty = Math.min(sy, bossY + dp(150)); }
         }
+        // hug the graze band: dodging at the outer edge turns dodges into grazes, which is the
+        // whole risk/reward loop; right after a hit it backs off so a non-god run still survives
+        float flee = dp(invuln > 0f ? Tuning.AUTO_FLEE_SAFE_DP : Tuning.AUTO_FLEE_DP);
         for (Bullet b : ebullets) {
-            if (Math.hypot(b.x - sx, b.y - sy) < dp(80)) {
+            if (Math.hypot(b.x - sx, b.y - sy) < flee) {
                 tx = sx + (sx - b.x) * 3;
                 ty = sy + (sy - b.y) * 2;
                 break;
@@ -1573,7 +1578,7 @@ public class GameView extends View {
             // purpose: taking a hit must never also pay out a graze bonus.
             if (b.grazeT <= 0f && Tuning.grazes(dx, dy, b.r + sr, grazeBand)) {
                 b.grazeT = Tuning.GRAZE_COOLDOWN;
-                grazeHit(b.x, b.y, b.color);
+                grazeHit(b.x, b.y, b.color, false);
             }
         }
 
@@ -1722,8 +1727,9 @@ public class GameView extends View {
      * (and through it fever), pays a little score. Collisions and the test hook both come
      * through here, so the hook cannot fake a graze the player could not get.
      */
-    void grazeHit(float x, float y, int color) {
-        graze++;
+    void grazeHit(float x, float y, int color, boolean hook) {
+        if (hook) grazeHooked++;
+        else graze++;
         combo++;
         if (combo > maxCombo) maxCombo = combo;
         comboT = 2.4f;
@@ -1732,8 +1738,11 @@ public class GameView extends View {
         spark(x, y, color, dp(90));
         floatText(sx, sy - dp(34), "擦弹", Color.rgb(120, 240, 255), dp(13));
         audio.play(AudioFx.GRAZE, 0.55f);
-        if (graze == 1 || graze == 10 || graze % 25 == 0)
+        if (hook) {
+            Log.i(TAG, "grazeHook n=" + grazeHooked);
+        } else if (graze == 1 || graze == 10 || graze % 25 == 0) {
             Log.i(TAG, "graze n=" + graze + " combo=" + combo + " energy=" + (int) energy);
+        }
         checkFever();
     }
 
@@ -2000,7 +2009,8 @@ public class GameView extends View {
                 + " superFails=" + superFails + " graze=" + graze + " missile=" + missilesFired
                 + " laser=" + laserHits + " wave=" + wavesSent + " split=" + splits
                 + " mine=" + minesDropped + " sniper=" + sniperShots + " mother=" + motherSpawns
-                + " streak=" + streaks + " hitstop=" + hitStops + " danger=" + dangers);
+                + " streak=" + streaks + " hitstop=" + hitStops + " danger=" + dangers
+                + " grazeHook=" + grazeHooked);
         if (rank >= 0) {
             ui.postDelayed(new Runnable() {
                 @Override public void run() { promptName(rank); }

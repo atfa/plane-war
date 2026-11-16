@@ -115,6 +115,16 @@ public final class Tuning {
     /** how many off-screen threats one frame may mark with an edge arrow, so a full screen cannot spam */
     public static final int MAX_DANGER_ARROWS = 6;
 
+    /**
+     * How close the autopilot lets a bullet come before it dodges, in dp. The graze ring ends at
+     * roughly dp(65) for a normal bullet, so dodging at dp(70) means bullets pass through the band
+     * and the automated playtest produces real grazes instead of only hook ones.
+     */
+    public static final float AUTO_FLEE_DP = 70f;
+
+    /** ...but right after taking a hit the autopilot backs off, so a non-god run stays alive */
+    public static final float AUTO_FLEE_SAFE_DP = 104f;
+
     /** hit-stop is capped per second, so a streak cannot freeze the game into a stutter */
     public static final float HIT_STOP_BUDGET = 0.35f;
 

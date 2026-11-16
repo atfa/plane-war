@@ -72,6 +72,19 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
+## 步骤 7 已落地（测试/文档收尾）
+
+- **自然擦弹**（Tony 从步骤 2 起的裁决条件）：autopilot 躲弹半径 dp(80) → `Tuning.AUTO_FLEE_DP=70`
+  （擦弹环外沿 ≈ dp(65)，所以躲的时候子弹真的穿过环带），挨打后（`invuln > 0`）回退
+  `AUTO_FLEE_SAFE_DP=104`。`graze` 只统计真实碰撞，钩子走 `grazeHooked`（日志 `grazeHook n=`），
+  `gameover` 末尾追加 `grazeHook=`；`test.sh` 断言**自然擦弹 `graze= >= 1`** 且钩子也生效。
+- `test.sh` 音效断言改为 `audio ready: N sfx` 且 `N >= SFX_MIN=19`（不再是写死相等），
+  并注明 `AudioFx.VER` 必须一起 bump。
+- README：补齐顿帧/连杀横幅/危险箭头/BOSS 警报音、自然擦弹说明、三档实测表、
+  **BOSS 血量走 `Boss.java` 的 `HP[]×(1+0.35×难度)×(1+0.25×已击杀)`（与 Tuning 是两套）**。
+- 同一 APK 三档连跑全 PASS：DIFF=0 score=68567 / 自然擦弹 12；DIFF=1 score=105708 / 30；
+  DIFF=2 score=209889 / 26；三档都是 boss spawn=1 killed=1、streak=20、hitstop=1、fps=60.2、19 sfx。
+
 ## 步骤 6 已落地（表现打磨）
 
 - 顿帧 hit-stop：`Tuning.hitStopFor(type, bossKill)`（重型 0.09s / 母舰 0.07s / BOSS 0.16s，杂兵 0），

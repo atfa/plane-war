@@ -13,7 +13,8 @@
 * **炸弹库存**（左下「炸」按钮）：开局 1 颗，上限 3，吃「爆」道具 +1（满了就加分）；
   自己选时机引爆，清弹 + 全场伤害。
 * **擦弹（graze）**：敌弹在机身外 dp(46) 的环带内掠过（未击中）→ 充能 + 连击 + 少量分数，
-  同一颗弹 0.25s 内只算一次；直击不奖励（先判直击）。
+  同一颗弹 0.25s 内只算一次；直击不奖励（先判直击）。autopilot 会贴着环带躲（dp(70)，
+  挨打后回退到 dp(104)），所以自动验收里的擦弹是真躲出来的，不是钩子刷的。
 * **连击狂热**：连击 ≥ 30 进入狂热，得分 x2 + 射速提升 + 机身红色尾焰，进入时全屏横幅。
 * **多阶段 BOSS**：每存活 80 秒出场一只命名 BOSS（3 种轮换：玄铁堡垒 / 雷穹母舰 / 赤炎妖机），
   顶部大血条带阶段刻度，登场横幅 + 下滑运镜；血量降到 66% / 33% 时进入新阶段：
@@ -27,7 +28,11 @@
   预留名额不会抢 BOSS 召唤）；随机单刷已改为编队波次：V 字 / 一字 / 双侧钳形 / 正弦列车 / 缺口墙，
   规模随难度与时长 ramp，缺口墙永远留一个可穿的空位。
 * 拾取掉落道具：火力 / 护盾 / 维修 / 炸弹 / 加分 / 速射 / 激光 / 追踪。
-* 敌人：杂兵、俯冲机、炮艇、精英、重型轰炸机（小 boss）。
+* **打击感打磨**：重型机 / 母舰 / BOSS 被击破时有**顿帧**（0.09 / 0.07 / 0.16 秒，杂兵没有，
+  每秒上限 0.35 秒，只缩放敌机与子弹的时间，不拖慢游戏时钟）；**5 / 10 / 20 连杀横幅** + 连杀铃音；
+  屏外**狙击手 / 母舰**在顶部边缘有红色危险箭头（最多 6 个，落在玩法区内，不会被系统栏吃掉）；
+  BOSS 登场播**警报音**（`AudioFx.ALARM`）。
+* 敌人：杂兵、俯冲机、炮艇、精英、重型轰炸机（小 boss）+ 4 种新敌机。
 * 随机事件：敌袭、狂暴、EMP、道具雨、缓速场、重型轰炸机登场。
 * 无关卡，计分 + 本地排行榜（前 10 名，可改名）。
 * 音乐、音效、震动反馈、粒子/冲击波/屏幕震动等特效。
@@ -69,6 +74,9 @@
 「难度 ramp」也一起放大（`x1 / x1.35 / x1.7`），所以高难度下更早就出现炮艇、精英和重型轰炸机，
 编队规模更大（x1 / x1.25 / x1.55）。难度会写进排行榜条目，榜单每行会显示当时的难度。
 
+BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难度) × (1 + 0.25 × 已击杀数)`，
+是独立的一套（`{80, 110, 140}` 基础值）。改难度曲线时两处都要看，否则 BOSS 会比杂兵更难/更易得离谱。
+
 ## 拖动灵敏度（7 档，可自选）
 
 标题页和暂停页都有 **拖动灵敏度** 选择条：
@@ -101,7 +109,8 @@ cd ~/fix/plane
 DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 ```
 
-`test_jvm.sh` 只编译不 import Android 的纯逻辑类（`Tuning.java`、`Super.java` …）+ `test/TestLogic.java`；
+`test_jvm.sh` 只编译不 import Android 的纯逻辑类（`Tuning.java`、`Super.java`、`Boss.java`、
+`Weapon.java`、`Wave.java`）+ `test/TestLogic.java` / `test/TestBoss.java`；
 新玩法的数值一律先进这些类，保证能在 JVM 上断言。
 
 用 intent 参数驱动游戏，不需要点击屏幕：
@@ -117,14 +126,26 @@ DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 | `--ei super N` | 本局内自动释放 N 次超必杀（日志 `super name=…`） |
 | `--ei bomb N` | 本局内自动引爆 N 颗炸弹（日志 `bomb n=…`） |
 | `--ei superall N` | 依次强制释放前 N 种超必杀主题（去随机化，保证 5 种主题都被跑到） |
-| `--ei graze N` | 本局内自动擦弹 N 次（走与碰撞同一个 `grazeHit()`，日志 `graze n=…`） |
+| `--ei graze N` | 本局内自动擦弹 N 次（走与碰撞同一个 `grazeHit()`，但与真实擦弹分开计数：日志 `grazeHook n=…`，真实擦弹才写 `graze n=`） |
 | `--ei boss N` | 本局内强制出场 N 只 BOSS（t=6s 起，不等 t=80s；日志 `boss spawn name= hp=` / `boss killed`） |
 | `--es powerup laser` / `--es powerup tracking` | t=6s 起在机头上方掎落一排道具（走真实 `collect()`，无测试旁路）；日志 `pup hook drop kind=` / `pup kind=laser t=8.0` / `pup kind=homing t=12.0` |
 | `--ei wave N` | t=1s 起 N 个编队波次 + 4 种新敌机各一只；日志 `wave kind= n= type=` / `enemy spawn type=` / `split n=` / `mine n=` / `sniper aim` / `mother spawn n=` / `clear mines=` |
 
 测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**5 种超必杀主题全部释放且无异常**
-（`superFails=0`）、炸弹日志、擦弹日志、`fever=1`、**BOSS 出场且被击破**（`boss spawn name=` / `boss killed`）、
-**帧率**（`fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
+（`superFails=0`）、炸弹日志、**自然擦弹**（`graze=` 来自真实碰撞，钩子另记 `grazeHook=`）、`fever=1`、
+**BOSS 出场且被击破**（`boss spawn name=` / `boss killed`）、激光与追踪导弹真的生效（`laser tick` / `missile n=`）、
+**4 种新敌机与编队全部出现**（`wave kind=` / `split n=` / `mine n=` / `sniper aim` / `mother spawn`）、
+**打磨项**（`streak=` / `hitstop=` / `danger=`）、**帧率**（`fps=` 必须 >= 45）、
+**音效数**（`audio ready: N sfx`，`N >= SFX_MIN=19`）→ 重启并检查排行榜从磁盘读回（`loaded best=`）。
+`AudioFx.VER` 与 `SFX_MIN` 必须一起 bump：新增音效而不改 VER，设备会继续用旧 wav 缓存，数量就对不上。
+三档难度实测（同一 APK 连续跑，均为 PASS）：
+
+| 难度 | score | 自然擦弹 | BOSS | 帧率 | 音效 |
+|----|----|----|----|----|----|
+| 简单 DIFF=0 | 68,567 | 12 | spawn=1 killed=1 | 60.2 | 19 |
+| 普通 DIFF=1 | 105,708 | 30 | spawn=1 killed=1 | 60.2 | 19 |
+| 困难 DIFF=2 | 209,889 | 26 | spawn=1 killed=1 | 60.2 | 19 |
+
 `stats` 行形如
 `stats t=12 score=2427 kills=11 weapon=1 lives=3 enemies=1 energy=37 bomb=0 graze=0 fever=0 boss=0 fps=60.2`。
 日志：`su -c "logcat -d -s planewar:V"`。
