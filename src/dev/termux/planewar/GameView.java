@@ -146,10 +146,14 @@ public class GameView extends View {
     float freezeT;                // 冰封万里: enemies are frozen for this long
     float quakeY;                 // 大地裂变: the wave travels up from here
     boolean quakeOn;
-    final float[] boltX = new float[Super.COUNT];   // 万雷齐鸣 columns (visual)
-    final float[] boltT = new float[Super.COUNT];
+    final float[] boltX = new float[Super.MAX_IMPACTS];   // 万雷齐鸣 columns (visual)
+    final float[] boltT = new float[Super.MAX_IMPACTS];
     int graze, bossAlive;         // reported in the periodic stats line
     int superHook, bombHook;      // test hooks: fire the skill N times during a run
+    int superAll;                 // test hook: fire one super per theme, so all five get covered
+    float superAllNext;           //   next fire time
+    int superThemeForce = -1;     // >= 0: force this theme on the next fireSuper()
+    int superFails;               // test hook: themes that threw, logged at gameover
     float autoSkillT;             // autopilot skill throttle
     float fpsAvg = 60f, fpsAcc;
     int fpsFrames;
@@ -294,6 +298,7 @@ public class GameView extends View {
         energy = 0f;
         bombStock = Tuning.BOMB_START;
         superCount = 0;
+        superFails = 0;
         bombFired = 0;
         superTheme = -1;
         superName = "";
@@ -304,7 +309,7 @@ public class GameView extends View {
         graze = 0;
         bossAlive = 0;
         autoSkillT = 0f;
-        for (int i = 0; i < Super.COUNT; i++) boltT[i] = 0f;
+        for (int i = 0; i < boltT.length; i++) boltT[i] = 0f;
         if (W > 0) {
             sx = W / 2f;
             sy = H * 0.72f;
@@ -373,6 +378,12 @@ public class GameView extends View {
     /** test hooks: fire the super blast / the bomb N times during the run (same code path) */
     void hookSuper(int n) { superHook = n; }
     void hookBomb(int n) { bombHook = n; }
+
+    /** test hook: fire every super theme once, spaced out, so the test can assert all five names */
+    void hookSuperAll(int n) {
+        superAll = Math.min(n, Super.COUNT);
+        superAllNext = 5f;
+    }
 
     void hookPower(int kind) {
         PowerUp p = new PowerUp();
@@ -589,12 +600,28 @@ public class GameView extends View {
             bombHook--;
             useBomb();
         }
+        // test hook: walk every theme in turn - a theme that throws kills the run, and the
+        // test asserts all five names show up, so no theme can hide behind the random pick
+        if (superAll > 0 && time >= superAllNext) {
+            superAllNext += 1.4f;
+            superThemeForce = (Super.COUNT - superAll) % Super.COUNT;
+            energy = Tuning.ENERGY_MAX;
+            try {
+                fireSuper();
+            } catch (RuntimeException ex) {
+                superFails++;
+                Log.e(TAG, "super theme=" + superThemeForce + " name=" + Super.name(superThemeForce)
+                        + " threw " + ex);
+            }
+            superThemeForce = -1;
+            superAll--;
+        }
 
         // passive charge: a run always earns at least one super blast
         energy = Math.min(Tuning.ENERGY_MAX, energy + Tuning.energyPerSec(diff) * dt);
         if (superFxT > 0) superFxT -= dt;
         if (freezeT > 0) freezeT -= dt;
-        for (int i = 0; i < Super.COUNT; i++)
+        for (int i = 0; i < boltT.length; i++)
             if (boltT[i] > 0) boltT[i] -= dt;
         if (quakeOn) updateQuake(dt);
         if (autopilot) autoSkill(dt);
@@ -1282,7 +1309,7 @@ public class GameView extends View {
         }
         energy = 0f;
         superCount++;
-        int theme = Super.pick(rnd);
+        int theme = superThemeForce >= 0 ? superThemeForce : Super.pick(rnd);
         superTheme = theme;
         superName = Super.name(theme);
         superFxT = 1.1f;
@@ -1453,7 +1480,7 @@ public class GameView extends View {
         ring(sx, sy, Color.WHITE, (float) Math.hypot(W, H), dp(16));
         ring(sx, sy, Color.rgb(120, 220, 255), (float) Math.hypot(W, H) * 0.7f, dp(10));
         ebullets.clear();
-        float dmg = (emp ? 60f : Tuning.bombDamage(diff)) * (emp ? 1f : 1f);
+        float dmg = emp ? 60f : Tuning.bombDamage(diff);
         for (int j = enemies.size() - 1; j >= 0; j--) {
             Enemy e = enemies.get(j);
             e.hp -= dmg;
@@ -1505,7 +1532,8 @@ public class GameView extends View {
         final int rank = Scores.submit(getContext(), Scores.lastName(getContext()),
                 score, kills, (int) time, diff);
         Log.i(TAG, "gameover score=" + score + " kills=" + kills + " time=" + (int) time
-                + " rank=" + rank + " events=" + eventsSeen + " diff=" + DIFF_NAME[diff]);
+                + " rank=" + rank + " events=" + eventsSeen + " diff=" + DIFF_NAME[diff]
+                + " superFails=" + superFails);
         if (rank >= 0) {
             ui.postDelayed(new Runnable() {
                 @Override public void run() { promptName(rank); }
@@ -2062,7 +2090,7 @@ public class GameView extends View {
 
     /** the visual aftermath of a super blast: bolt columns and the quake wave */
     private void drawSuperFx(Canvas c) {
-        for (int i = 0; i < Super.COUNT; i++) {
+        for (int i = 0; i < boltT.length; i++) {
             if (boltT[i] <= 0f) continue;
             float k = boltT[i] / 0.45f;
             float w = dp(9) * k;

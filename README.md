@@ -102,9 +102,10 @@ DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 | `--ei diff N` | 0 简单 / 1 普通 / 2 困难，例如 `DIFF=2 ./test.sh` |
 | `--ei super N` | 本局内自动释放 N 次超必杀（日志 `super name=…`） |
 | `--ei bomb N` | 本局内自动引爆 N 颗炸弹（日志 `bomb n=…`） |
+| `--ei superall N` | 依次强制释放前 N 种超必杀主题（去随机化，保证 5 种主题都被跑到） |
 
-测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**超必杀与炸弹日志**、
-**帧率**（`stats` 行的 `fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
+测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**5 种超必杀主题全部释放且无异常**
+（`superFails=0`）、炸弹日志、**帧率**（`stats` 行的 `fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
 `stats` 行形如
 `stats t=12 score=2427 kills=11 weapon=1 lives=3 enemies=1 energy=37 bomb=0 graze=0 fever=0 boss=0 fps=60.2`。
 日志：`su -c "logcat -d -s planewar:V"`。

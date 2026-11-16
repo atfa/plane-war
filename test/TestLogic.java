@@ -76,6 +76,10 @@ public class TestLogic {
     static void superThemes() {
         System.out.println("[Super]");
         ok(Super.COUNT == 5, "five super blast themes");
+        ok(Super.MAX_IMPACTS >= 1, "MAX_IMPACTS is usable as an array size");
+        int maxHits = 0;
+        for (int t = 0; t < Super.COUNT; t++) maxHits = Math.max(maxHits, Super.impacts(t));
+        ok(Super.MAX_IMPACTS == maxHits, "MAX_IMPACTS is the largest impact count of any theme");
         ok(Super.NAME.length == Super.COUNT && Super.SUB.length == Super.COUNT
                 && Super.COLOR.length == Super.COUNT, "name/sub/colour tables match COUNT");
         for (int t = 0; t < Super.COUNT; t++) {
@@ -86,6 +90,14 @@ public class TestLogic {
             ok(Super.impacts(t) >= 0, "theme " + t + " impact count is sane");
             if (Super.impacts(t) > 0)
                 ok(Super.radiusDp(t) > 0, "theme " + t + " point impacts have a radius");
+            // the view sizes its effect arrays with MAX_IMPACTS and indexes them with
+            // 0..impacts(theme)-1; if that ever exceeds MAX_IMPACTS the game crashes on the
+            // field (this is exactly the 万雷齐鸣 ArrayIndexOutOfBoundsException we shipped once)
+            ok(Super.impacts(t) <= Super.MAX_IMPACTS,
+                    "theme " + t + " impacts (" + Super.impacts(t) + ") fit the effect arrays ("
+                            + Super.MAX_IMPACTS + ")");
+            for (int i = 0; i < Super.impacts(t); i++)
+                ok(i < Super.MAX_IMPACTS, "theme " + t + " impact index " + i + " is in bounds");
         }
         ok(Super.name(-5).equals(Super.name(0)), "negative theme clamps to the first");
         ok(Super.name(99).equals(Super.name(Super.COUNT - 1)), "big theme clamps to the last");

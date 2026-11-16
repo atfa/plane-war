@@ -28,9 +28,16 @@
 - 顺带修的两个真 bug：`Scores` 落盘 `apply()`→`commit()`（进程被杀丢排行榜）；
   `test.sh` 期间 `stay_on_while_plugged_in=7`（本机 30s 息屏会让 vsync 游戏循环停摆，trap EXIT 还原）。
 - autopilot 通过 `autoSkill()` 调用与手动**同一个** `fireSuper()` / `useBomb()`（无测试专用旁路）。
+- Tony 验出并修掉的闪退：`boltX/boltT` 按 `Super.COUNT`（5）开，而万雷齐鸣 `HITS=6` →
+  每次超必杀 20% 概率 `ArrayIndexOutOfBoundsException` 直接杀进程。现按 `Super.MAX_IMPACTS`
+  （= max(HITS)，静态初始化算出）开数组，三处遍历上界统一用 `boltT.length`；
+  JVM 加不变量 `impacts(t) <= MAX_IMPACTS`（54→70 项）；验收去随机化：新钩子
+  `--ei superall N` 依次强制释放前 N 种主题，`test.sh` 断言 5 个主题名全出现且 `superFails=0`
+  （`fireSuper` 包 try/catch 计数，gameover 行末尾追加 `superFails=`，原有字段顺序未动）。
 
-实测（步骤 1 验收）：`./test_jvm.sh` 54 项全绿；`DIFF=1 ./test.sh` PASS
-（score=18138 kills=27 super=2 bomb=1 fps=60.2 `loaded best=18138`）。
+实测（步骤 1 验收）：`./test_jvm.sh` 70 项全绿；`DIFF=1 ./test.sh` PASS
+（score=10016 kills=26 super=6 含全部 5 主题 bomb=1 fps=60.2 superFails=0 `loaded best=10016`，
+`logcat -b crash` 为空）。
 
 ## 关键环境事实（照抄，省得重测）
 

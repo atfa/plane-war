@@ -33,6 +33,19 @@ public final class Super {
     /** radius of one impact point, in dp (0 = whole screen) */
     static final float[] RADIUS_DP = {70f, 42f, 0f, 0f, 0f};
 
+    /**
+     * The largest impact count of any theme. Views size their effect arrays with this, never
+     * with COUNT - the two are different numbers and mixing them up is an
+     * ArrayIndexOutOfBoundsException on the theme that has the most impacts (万雷齐鸣: 6).
+     */
+    public static final int MAX_IMPACTS = maxHits();
+
+    private static int maxHits() {
+        int m = 0;
+        for (int h : HITS) if (h > m) m = h;
+        return m;
+    }
+
     public static String name(int theme) { return NAME[clamp(theme)]; }
     public static String sub(int theme) { return SUB[clamp(theme)]; }
     public static int color(int theme) { return COLOR[clamp(theme)]; }

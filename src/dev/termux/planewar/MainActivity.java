@@ -44,6 +44,8 @@ public class MainActivity extends Activity {
             if (sup > 0) view.hookSuper(sup);
             int bomb = b.getInt("bomb", 0);
             if (bomb > 0) view.hookBomb(bomb);
+            int sa = b.getInt("superall", 0);
+            if (sa > 0) view.hookSuperAll(sa);
             int die = b.getInt("autodie", 0);
             if (die > 0) view.setAutoDie(die);
             if (b.containsKey("vibrate")) view.setVibe(b.getBoolean("vibrate", true));

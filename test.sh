@@ -3,6 +3,8 @@
 #   1. clean install (a root-created /data/user/0/<pkg> breaks SharedPreferences on this device)
 #   2. launch with hooks: autopilot + god + report every 4s + auto-crash after 26s
 #      -> the plane must fly, shoot, kill enemies, trigger events and post a score
+#      -> --ei superall 5 fires every super theme once (a random pick would hide a broken
+#         theme: with 5 themes and 2 supers a single theme slips through ~36% of runs)
 #   3. relaunch and check the leaderboard is read back from disk
 # The loop is vsync driven and the game pauses when a notification steals focus, so the
 # test keeps waking the screen and polls the log instead of sleeping a fixed time.
@@ -31,7 +33,8 @@ su -c "input keyevent KEYCODE_HOME" 2>/dev/null
 sleep 2
 
 LAUNCH=$(su -c "am start -n $PKG/.MainActivity --ez autostart true --ez autopilot true \
-   --ez god true --ei report 4 --ei autodie 26 --ei diff $DIFF --ei super 1 --ei bomb 1" 2>&1)
+   --ez god true --ei report 4 --ei autodie 26 --ei diff $DIFF --ei super 1 --ei bomb 1 \
+   --ei superall 5" 2>&1)
 echo "launch:  $LAUNCH"
 
 for i in $(seq 1 40); do
@@ -39,8 +42,8 @@ for i in $(seq 1 40); do
   su -c "input keyevent KEYCODE_WAKEUP" >/dev/null 2>&1
   if su -c "logcat -d -s planewar:V" | grep -q 'gameover score=[1-9]'; then break; fi
 done
-# Scores.submit() uses SharedPreferences.apply(), which writes on a background thread:
-# force-stopping the app immediately after the crash can drop the leaderboard write.
+# Scores.submit() uses SharedPreferences.commit() (synchronous) so the board survives, but
+# give the write a moment anyway before we force-stop the app.
 sleep 3
 su -c "am force-stop $PKG"
 su -c "input keyevent KEYCODE_HOME" 2>/dev/null
@@ -67,6 +70,14 @@ SUPER=$(echo "$LOG" | grep -c 'super name=')
 BOMB=$(echo "$LOG" | grep -c 'bomb n=')
 STATS=$(echo "$LOG" | grep -c 'stats .*energy=[0-9]* bomb=[0-9]* graze=[0-9]* fever=[0-9]* boss=[0-9]* fps=[0-9]')
 FPS=$(echo "$LOG" | grep -oE 'fps=[0-9.]+' | tail -1 | cut -d= -f2)
+FAILS=$(echo "$LOG" | grep -oE 'superFails=[0-9]+' | tail -1 | cut -d= -f2)
+# every super theme must fire and survive: a theme that throws kills the process on the field
+THEMES="烈焰流星 万雷齐鸣 圣光普照 大地裂变 冰封万里"
+MISSING=""
+for t in $THEMES; do
+  n=$(echo "$LOG" | grep -c "super name=$t")
+  [ "$n" -ge 1 ] || MISSING="$MISSING $t"
+done
 echo "difficulty: $DIFF (0 简单 1 普通 2 困难)"
 echo "run:     $OVER"
 [ "$STARTED" -ge 1 ] || echo "WARN: the game never started - check the launch: line"
@@ -75,13 +86,15 @@ echo "super:   $SUPER (energy super blast fired)"
 echo "bomb:    $BOMB (player bomb fired)"
 echo "stats:   $STATS lines with energy/bomb/graze/fever/boss/fps"
 echo "fps:     ${FPS:-none} (rolling average, must be >= 45)"
+echo "themes:  missing:${MISSING:- none} superFails=${FAILS:-none} (all 5 themes must fire)"
 echo "audio:   $AUDIO (1 = all sfx loaded)"
 echo "persist: ${LOADED:-none}"
 FPS_OK=$(awk -v f="${FPS:-0}" 'BEGIN { print (f >= 45) ? 1 : 0 }')
 if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "$AUDIO" -ge 1 ] && [ "$SUPER" -ge 1 ] \
    && [ "$BOMB" -ge 1 ] && [ "$STATS" -ge 1 ] && [ "$FPS_OK" = "1" ] \
+   && [ -z "$MISSING" ] && [ "${FAILS:-1}" = "0" ] \
    && echo "$LOADED" | grep -qE 'loaded best=[1-9]'; then
-  echo "PASS: autopilot flew, shot, killed, triggered events, fired the super blast and a bomb,"
+  echo "PASS: autopilot flew, shot, killed, triggered events, fired all 5 super themes and a bomb,"
   echo "      kept fps >= 45; score persisted and read back"
   exit 0
 fi
