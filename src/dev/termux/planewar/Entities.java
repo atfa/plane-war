@@ -8,6 +8,7 @@ class Bullet {
     boolean enemy;
     boolean homing;        // player missile: steers onto its locked target
     int target = -1;       // locked index in the enemy list, n = the boss, -1 = unlocked
+    boolean mine;          // miner mine: hangs in the air, cleared with every other bullet
     float grazeT;         // graze cooldown, so one bullet cannot be farmed every frame
 }
 
@@ -18,6 +19,8 @@ class Enemy {
     float hp, maxhp;
     float t;              // age (s)
     float fire;           // shot countdown
+    float aimT;           // sniper telegraph remaining (s)
+    float aimX, aimY;     // sniper telegraph target, locked once when the telegraph starts
     float phase;          // per enemy phase for sine patterns
     int score;
     int color;

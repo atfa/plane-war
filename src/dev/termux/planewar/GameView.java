@@ -445,6 +445,23 @@ public class GameView extends View {
 
     void hookSpawn(int type) { spawnEnemy(type, W / 2f); }
 
+    /** --ei wave N: N formations, spaced out, so a 26s test run can see them all.
+     *  Deferred: the intent hooks run before the run starts, and resetRun() clears the spawn queue. */
+    int waveHook;
+
+    void hookWave(int n) { waveHook = n; }
+
+    private void applyWaveHook() {
+        int n = waveHook;
+        waveHook = 0;
+        for (int i = 0; i < n; i++) {
+            pending.add(new float[]{1.0f + i * 1.6f, -2f, i % Wave.COUNT});
+            // the four new types are queued too, so a 26s field run sees every one of them
+            pending.add(new float[]{1.3f + i * 1.6f, 5 + (i % 4), -1f});
+        }
+        Log.i(TAG, "wave hook armed n=" + n);
+    }
+
     void hookEvent(int k) { triggerEvent(k); }
 
     void setAutoDie(float sec) { autoDie = sec; }
@@ -696,8 +713,13 @@ public class GameView extends View {
         if (eventTimer <= 0) triggerEvent(-1);
         spawnTimer -= dt;
         if (spawnTimer <= 0) {
-            spawnEnemy(-1, -1);
+            spawnCount++;
             float rt = ramp();
+            // every third spawn is a formation, so the run has waves instead of a random drizzle
+            if (spawnCount % 3 == 0 && rt > 20f) spawnWave(waveSeq++ % Wave.COUNT);
+            else spawnEnemy(-1, -1);
+            // the new enemy types join on their own cadence so the field test can see all four
+            if (rt > 30f && spawnCount % 7 == 0) spawnNewTypeWave();
             spawnTimer = Math.max(0.35f, 1.5f - rt * 0.008f) * D_SPAWN[diff]
                     * (0.6f + rnd.nextFloat() * 0.8f);
         }
@@ -708,7 +730,8 @@ public class GameView extends View {
             p[0] -= dt;
             if (p[0] <= 0) {
                 int ty = (int) p[1];
-                if (ty < 0) spawnPendingPower(p[2]);   // type -1 = power-up crate
+                if (ty == -2) spawnWave((int) p[2]);   // a queued formation
+                else if (ty < 0) spawnPendingPower(p[2]);   // type -1 = power-up crate
                 else spawnEnemy(ty, p[2]);
                 pending.remove(i);
             }
@@ -716,6 +739,7 @@ public class GameView extends View {
 
         steer(dt);
         fire(dt);
+        if (waveHook > 0) applyWaveHook();
         if (!hookQueue.isEmpty()) {
             hookPowerIn -= dt;
             if (hookPowerIn <= 0) {
@@ -1037,6 +1061,41 @@ public class GameView extends View {
                 e.color = E_ELITE;
                 e.fire = ef(1.4f);
                 break;
+            case 5: // splitter - breaks into two grunts when it dies
+                e.r = dp(20);
+                e.hp = e.maxhp = 7 * hpScale;
+                e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(90);
+                e.vy = dp(115) * spScale;
+                e.score = 380;
+                e.color = Color.rgb(150, 255, 130);
+                break;
+            case 6: // miner - hovers high and drops hanging mines
+                e.r = dp(24);
+                e.hp = e.maxhp = 26 * hpScale;
+                e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(70);
+                e.vy = dp(150);
+                e.score = 620;
+                e.color = Color.rgb(255, 200, 90);
+                e.fire = 0.05f;          // acts on arrival: the autopilot deletes new types in under a second
+                break;
+            case 7: // sniper - telegraphs a red line, then fires one fast shot
+                e.r = dp(15);
+                e.hp = e.maxhp = 14 * hpScale;
+                e.vx = 0;
+                e.vy = dp(190);
+                e.score = 540;
+                e.color = Color.rgb(255, 60, 60);
+                e.fire = 0.05f;          // telegraph on arrival, so a fast kill cannot hide it
+                break;
+            case 8: // mothership - parks at the top and keeps producing grunts
+                e.r = dp(38);
+                e.hp = e.maxhp = 90 * hpScale;
+                e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(45);
+                e.vy = dp(90);
+                e.score = 2600;
+                e.color = Color.rgb(120, 200, 255);
+                e.fire = 0.05f;          // first minion on arrival
+                break;
             case 4: // heavy - mini boss
                 e.r = dp(46);
                 e.hp = e.maxhp = 95 * hpScale;
@@ -1056,6 +1115,47 @@ public class GameView extends View {
                 break;
         }
         enemies.add(e);
+        Log.i(TAG, "enemy spawn type=" + type);
+    }
+
+    int wavesSent, spawnCount, waveSeq;
+
+    /** formation wave: lanes come from Wave (pure Java) and are mapped into [r, W-r] when they spawn */
+    private void spawnWave(int kind) {
+        float rt = ramp();
+        int n = Wave.size(kind, diff, rt);
+        float[] lanes = Wave.lanes(kind, n);
+        float[] dels = Wave.delays(kind, n);
+        int type = Wave.typeFor(kind, rt);
+        int live = 0;
+        for (int i = 0; i < n; i++) {
+            if (lanes[i] < 0f) continue;                 // the gap in a wall: nobody spawns there
+            // the lane is resolved to pixels here: [r, W-r] with a dp(30) margin, so no member
+            // can spawn off screen, and the existing delayed-spawn queue carries it
+            float x = dp(30) + lanes[i] * (W - dp(60));
+            pending.add(new float[]{dels[i], type, x});
+            live++;
+        }
+        wavesSent++;
+        Log.i(TAG, "wave kind=" + Wave.NAME[kind] + " n=" + live + " type=" + type + " total=" + wavesSent);
+    }
+
+    /** one new-type wave: guarantees the four new enemies are on screen, for the field test */
+    private void spawnNewTypeWave() {
+        newTypeSeq++;
+        int type = Wave.newTypeFor(newTypeSeq, ramp());
+        spawnEnemy(type, -1);
+    }
+
+    int newTypeSeq;
+
+    /** every clear-bullets entry point goes through here, so mines never outlive a bomb */
+    private int clearEnemyBullets() {
+        int mines = 0;
+        for (Bullet b : ebullets) if (b.mine) mines++;
+        ebullets.clear();
+        if (mines > 0) Log.i(TAG, "clear mines=" + mines);
+        return mines;
     }
 
     private void spawnPower(int kind, float x, float y) {
@@ -1224,6 +1324,52 @@ public class GameView extends View {
                         for (int k = -1; k <= 1; k++) enemyShot(e, base + k * 0.26f, dp(250));
                     }
                     break;
+                case 5: // splitter: drifts down in a wide weave, no shots - the danger is the split
+                    e.vx = (float) Math.sin(e.t * 2.4f + e.phase) * dp(110);
+                    break;
+                case 6: // miner: parks in the upper third and drops hanging mines
+                    if (e.y > H * 0.18f) { e.hover = 1; e.vy = 0; }
+                    if (e.fire > 0.9f) e.fire = 0.9f;          // first mine lands fast, before the autopilot deletes it
+                    if (e.hover == 1) e.vx = (float) Math.sin(e.t * 0.9f) * dp(80);
+                    e.fire -= dt * slow;
+                    if (e.fire <= 0) {
+                        e.fire = ef(1.7f);
+                        dropMine(e);
+                    }
+                    break;
+                case 7: // sniper: 0.7s red telegraph locked on the player, then one fast shot
+                    if (e.y > H * 0.25f) { e.hover = 1; e.vy = 0; }
+                    if (e.fire > 0.9f) e.fire = 0.9f;          // the telegraph must start while it is still alive
+                    e.fire -= dt * slow;
+                    if (e.aimT <= 0f && e.fire <= 0.7f) {
+                        e.aimT = 0.7f;
+                        e.aimX = sx;                       // locked once: a tracking telegraph is undodgeable
+                        e.aimY = sy;
+                        Log.i(TAG, "sniper aim telegraph");
+                    }
+                    if (e.aimT > 0f) e.aimT -= dt * slow;
+                    if (e.fire <= 0f) {
+                        e.fire = ef(2.4f);
+                        enemyShot(e, (float) Math.atan2(e.aimX - e.x, e.aimY - e.y), dp(520));
+                        sniperShots++;
+                        Log.i(TAG, "sniper aim=" + sniperShots);
+                    }
+                    break;
+                case 8: // mothership: parks at the top and keeps producing grunts
+                    if (e.y > H * 0.14f) { e.hover = 1; e.vy = 0; }
+                    if (e.fire > 0.7f) e.fire = 0.7f;
+                    if (e.hover == 1) e.vx = (float) Math.sin(e.t * 0.5f) * dp(60);
+                    e.fire -= dt * slow;
+                    if (e.fire <= 0) {
+                        e.fire = ef(2.6f);
+                        // the minions must not eat the boss summon slots, so keep a fat reserve
+                        if (enemies.size() <= D_CAP[diff] - 6) {
+                            spawnEnemy(0, e.x + (rnd.nextFloat() * 2 - 1) * dp(30));
+                            motherSpawns++;
+                            Log.i(TAG, "mother spawn n=" + motherSpawns);
+                        }
+                    }
+                    break;
                 case 4: // heavy: slow descent, radial bursts
                     if (e.y > H * 0.26f) {
                         e.hover = 1;
@@ -1249,6 +1395,48 @@ public class GameView extends View {
             if (e.x > W - e.r) { e.x = W - e.r; e.vx = -Math.abs(e.vx); }
             if (e.y > H + dp(70)) enemies.remove(i);
         }
+    }
+
+    int sniperShots, motherSpawns, minesDropped, splits;
+
+    /** a splitter breaks into two grunts; capped, and the children never split again */
+    private void splitEnemy(Enemy e) {
+        int room = D_CAP[diff] - enemies.size();
+        if (room < 2) return;
+        for (int k = 0; k < 2; k++) {
+            Enemy c = new Enemy();
+            c.type = 0;                       // grunt: children do not split, so there is no recursion
+            c.r = dp(11);
+            c.hp = c.maxhp = Math.max(1f, e.maxhp * 0.25f);
+            c.x = e.x + (k == 0 ? -dp(18) : dp(18));
+            c.y = e.y;
+            c.vx = (k == 0 ? -1 : 1) * dp(120);
+            c.vy = e.vy * 0.9f;
+            c.score = 60;
+            c.color = Color.rgb(190, 255, 170);
+            c.t = 0f;
+            enemies.add(c);
+        }
+        splits++;
+        Log.i(TAG, "split n=2 total=" + splits);
+    }
+
+    /** a mine hangs where it was dropped: it is an enemy bullet, so every clear-bullets path clears it */
+    private void dropMine(Enemy e) {
+        Bullet b = new Bullet();
+        b.x = e.x;
+        b.y = e.y + e.r;
+        b.vx = 0;
+        b.vy = dp(26);
+        b.r = dp(9);
+        b.dmg = 1;
+        b.life = 9f;
+        b.color = Color.rgb(255, 200, 90);
+        b.enemy = true;
+        b.mine = true;
+        ebullets.add(b);
+        minesDropped++;
+        Log.i(TAG, "mine n=" + minesDropped);
     }
 
     private void enemyShot(Enemy e, float a, float sp) {
@@ -1381,6 +1569,7 @@ public class GameView extends View {
 
     private void killEnemy(Enemy e, int index) {
         enemies.remove(index);
+        if (e.type == Wave.SPLITTER) splitEnemy(e);
         kills++;
         combo++;
         if (combo > maxCombo) maxCombo = combo;
@@ -1544,7 +1733,7 @@ public class GameView extends View {
         flashWhite = 0.7f;
         flashCyan = 0.6f;
         shake = Math.max(shake, 18f);
-        if (Super.clearsBullets(theme)) ebullets.clear();
+        if (Super.clearsBullets(theme)) clearEnemyBullets();
 
         int killed = 0;
         switch (theme) {
@@ -1710,7 +1899,7 @@ public class GameView extends View {
         bombSlow = 0.5f;
         ring(sx, sy, Color.WHITE, (float) Math.hypot(W, H), dp(16));
         ring(sx, sy, Color.rgb(120, 220, 255), (float) Math.hypot(W, H) * 0.7f, dp(10));
-        ebullets.clear();
+        clearEnemyBullets();
         float dmg = emp ? 60f : Tuning.bombDamage(diff);
         for (int j = enemies.size() - 1; j >= 0; j--) {
             Enemy e = enemies.get(j);
@@ -1765,7 +1954,8 @@ public class GameView extends View {
         Log.i(TAG, "gameover score=" + score + " kills=" + kills + " time=" + (int) time
                 + " rank=" + rank + " events=" + eventsSeen + " diff=" + DIFF_NAME[diff]
                 + " superFails=" + superFails + " graze=" + graze + " missile=" + missilesFired
-                + " laser=" + laserHits);
+                + " laser=" + laserHits + " wave=" + wavesSent + " split=" + splits
+                + " mine=" + minesDropped + " sniper=" + sniperShots + " mother=" + motherSpawns);
         if (rank >= 0) {
             ui.postDelayed(new Runnable() {
                 @Override public void run() { promptName(rank); }
@@ -2168,6 +2358,41 @@ public class GameView extends View {
                     paint.setAlpha(255);
                     paint.setStyle(Paint.Style.FILL);
                     break;
+                case 5: // splitter: two lobes, splits on death
+                    c.drawCircle(-e.r * 0.45f, 0, e.r * 0.62f, paint);
+                    c.drawCircle(e.r * 0.45f, 0, e.r * 0.62f, paint);
+                    paint.setColor(Color.rgb(30, 70, 30));
+                    c.drawCircle(0, 0, e.r * 0.3f, paint);
+                    break;
+                case 6: // miner: boxy hull with a mine bay underneath
+                    rect.set(-e.r, -e.r * 0.5f, e.r, e.r * 0.5f);
+                    c.drawRoundRect(rect, dp(8), dp(8), paint);
+                    paint.setColor(Color.rgb(90, 60, 10));
+                    c.drawCircle(0, e.r * 0.7f, e.r * 0.34f, paint);
+                    break;
+                case 7: // sniper: slim hull, red telegraph line locked on the player
+                    if (e.aimT > 0f) {
+                        paint.setStyle(Paint.Style.STROKE);
+                        paint.setStrokeWidth(dp(1.6f));
+                        paint.setColor(Color.rgb(255, 60, 60));
+                        paint.setAlpha((int) (120 + 100 * Math.sin(e.t * 22f)));
+                        c.drawLine(0, 0, e.aimX - e.x, e.aimY - e.y, paint);
+                        paint.setAlpha(255);
+                        paint.setStyle(Paint.Style.FILL);
+                    }
+                    path.reset();
+                    path.moveTo(0, -e.r * 1.6f);
+                    path.lineTo(e.r * 0.7f, e.r);
+                    path.lineTo(-e.r * 0.7f, e.r);
+                    path.close();
+                    c.drawPath(path, paint);
+                    break;
+                case 8: // mothership: wide hull with three bays
+                    rect.set(-e.r, -e.r * 0.42f, e.r, e.r * 0.42f);
+                    c.drawRoundRect(rect, dp(14), dp(14), paint);
+                    paint.setColor(Color.rgb(20, 50, 90));
+                    for (int k = -1; k <= 1; k++) c.drawCircle(k * e.r * 0.55f, 0, e.r * 0.2f, paint);
+                    break;
                 case 4: // heavy: hull + pods + cannons
                     rect.set(-e.r, -e.r * 0.62f, e.r, e.r * 0.62f);
                     c.drawRoundRect(rect, dp(10), dp(10), paint);
@@ -2495,7 +2720,7 @@ public class GameView extends View {
         scoreF += pts;
         bossesKilled++;
         bossAlive = 0;
-        ebullets.clear();
+        clearEnemyBullets();
         slowT = Math.max(slowT, 2.5f);      // the slow motion that sells the kill
         bombSlow = 0.55f;
         shake = Math.max(shake, 26f);

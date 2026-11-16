@@ -26,6 +26,7 @@ public class TestLogic {
         grazeAndFever();
         bossFight();
         weapons();
+        waves();
         System.out.println(failed == 0
                 ? "OK: " + checks + " checks passed"
                 : "FAILED: " + failed + "/" + checks + " checks failed");
@@ -86,6 +87,55 @@ public class TestLogic {
                 "an off-screen enemy is never locked, so a missile does not chase a spawn off the top");
         ok(Weapon.MAX_PLAYER_BULLETS >= 60,
                 "player bullets are capped, so LV5 + missiles + laser cannot stack into a frame-time spike");
+    }
+
+    // ---------------------------------------------------------------- Wave
+
+    static void waves() {
+        System.out.println("[Wave]");
+        ok(Wave.COUNT == Wave.NAME.length, "every formation has a name");
+        ok(Wave.TYPES == Wave.TYPE_NAME.length, "every enemy type has a name");
+        for (int kind = 0; kind < Wave.COUNT; kind++) {
+            for (int diff = 0; diff <= 2; diff++) {
+                for (float rt = 0f; rt <= 300f; rt += 25f) {
+                    int n = Wave.size(kind, diff, rt);
+                    ok(n >= 3 && n <= 9, "formation size stays in a sane band");
+                    float[] lanes = Wave.lanes(kind, n);
+                    float[] dels = Wave.delays(kind, n);
+                    ok(lanes.length == n && dels.length == n, "one lane and one delay per member");
+                    for (int i = 0; i < n; i++) {
+                        ok(dels[i] >= 0f, "no member spawns in the past");
+                        if (lanes[i] < 0f) continue;             // the gap in a wall
+                        ok(lanes[i] >= 0f && lanes[i] <= 1f, "a lane is a fraction inside [0,1]");
+                        // the view maps the fraction with a margin: x = m + lane * (W - 2m)
+                        for (float W : new float[]{320f, 700f, 1400f}) {
+                            float m = 30f;
+                            float x = m + lanes[i] * (W - 2 * m);
+                            ok(x >= m && x <= W - m, "no member can spawn off screen, at any width");
+                        }
+                    }
+                    if (kind == Wave.WALL) {
+                        int gap = Wave.gapIndex(n);
+                        ok(gap >= 0 && gap < n && lanes[gap] < 0f, "a wall always has exactly one gap");
+                        int filled = 0;
+                        for (int i = 0; i < n; i++) if (lanes[i] >= 0f) filled++;
+                        ok(filled == n - 1, "the gap is the only empty slot");
+                    }
+                }
+            }
+        }
+        ok(Wave.size(Wave.V, 2, 240f) >= Wave.size(Wave.V, 0, 0f),
+                "harder and later means bigger formations");
+        ok(Wave.size(Wave.WALL, 2, 1e6f) <= 9, "the ramp cannot grow a wall past the cap");
+        ok(Wave.gapIndex(5) == 2 && Wave.gapIndex(9) == 4, "the gap sits inside the row, not at its edge");
+        ok(Wave.SPLITTER == 5 && Wave.MINER == 6 && Wave.SNIPER == 7 && Wave.MOTHER == 8,
+                "the new types extend the table, they do not renumber the old ones");
+        ok(Wave.newTypeFor(0, 10f) == 0, "no new enemy type in the first 20 seconds");
+        for (int i = 0; i < 4; i++) {
+            int t = Wave.newTypeFor(i, 90f);
+            ok(t >= Wave.SPLITTER && t <= Wave.MOTHER, "every new type appears in the pool");
+        }
+        ok(Wave.newTypeFor(3, 30f) == Wave.SPLITTER, "the mothership waits until the player can survive it");
     }
 
     // ---------------------------------------------------------------- Tuning

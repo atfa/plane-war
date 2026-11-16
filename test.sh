@@ -34,7 +34,7 @@ sleep 2
 
 LAUNCH=$(su -c "am start -n $PKG/.MainActivity --ez autostart true --ez autopilot true \
    --ez god true --ei report 4 --ei autodie 26 --ei diff $DIFF --ei super 1 --ei bomb 1 \
-   --ei superall 5 --ei graze 20 --ei boss 1 --es powerup laser --es powerup2 tracking" 2>&1)
+   --ei superall 5 --ei graze 20 --ei boss 1 --es powerup laser --es powerup2 tracking --ei wave 4" 2>&1)
 echo "launch:  $LAUNCH"
 
 for i in $(seq 1 40); do
@@ -79,6 +79,16 @@ LASERPUP=$(echo "$LOG" | grep -c 'pup kind=laser')
 HOMEPUP=$(echo "$LOG" | grep -c 'pup kind=homing')
 LASERHIT=$(echo "$LOG" | grep -oE 'laser tick n=[0-9]+' | tail -1 | cut -d= -f2)
 MISSILE=$(echo "$LOG" | grep -oE 'missile n=[0-9]+' | tail -1 | cut -d= -f2)
+WAVE=$(echo "$LOG" | grep -c 'wave kind=')
+SPLIT=$(echo "$LOG" | grep -c 'split n=')
+MINE=$(echo "$LOG" | grep -oE 'mine n=[0-9]+' | tail -1 | cut -d= -f2)
+SNIPER=$(echo "$LOG" | grep -cE 'sniper aim( telegraph)?')
+MOTHER=$(echo "$LOG" | grep -c 'mother spawn')
+NEWMISS=""
+for t in 5 6 7 8; do
+  n=$(echo "$LOG" | grep -c "enemy spawn type=$t")
+  [ "$n" -ge 1 ] || NEWMISS="$NEWMISS type=$t"
+done
 FPS=$(echo "$LOG" | grep -oE 'fps=[0-9.]+' | tail -1 | cut -d= -f2)
 FAILS=$(echo "$LOG" | grep -oE 'superFails=[0-9]+' | tail -1 | cut -d= -f2)
 # every super theme must fire and survive: a theme that throws kills the process on the field
@@ -98,6 +108,7 @@ echo "stats:   $STATS lines with energy/bomb/graze/fever/boss/fps"
 echo "graze:   $GRAZE log lines, last ${GRAZED:-none} (graze charges energy + combo)"
 echo "fever:   $FEVER stats lines with fever=1 (combo fever must be reachable)"
 echo "boss:    spawn=$BSPAWN killed=$BKILL last summon=${BSUMMON:-none} (3 phase boss must die)"
+echo "waves:   formations=$WAVE split=$SPLIT mines=${MINE:-none} sniper=${SNIPER:-none} mother=${MOTHER:-none} missing:${NEWMISS:- none}"
 echo "weapons: pup laser=$LASERPUP pup homing=$HOMEPUP last laser tick=${LASERHIT:-none} missiles=${MISSILE:-none}"
 echo "        (laser must settle once per target per 0.15s, so a tick stays in the single digits)"
 echo "fps:     ${FPS:-none} (rolling average, must be >= 45)"
@@ -111,6 +122,8 @@ if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "$AUDIO" -ge 1 ] && [ "$SUPER" -ge 
    && [ "$BSPAWN" -ge 1 ] && [ "$BKILL" -ge 1 ] \
    && [ "$LASERPUP" -ge 1 ] && [ "$HOMEPUP" -ge 1 ] && [ "${MISSILE:-0}" -ge 1 ] \
    && [ "${LASERHIT:-99}" -le 12 ] \
+   && [ "$WAVE" -ge 1 ] && [ "$SPLIT" -ge 1 ] && [ "${MINE:-0}" -ge 1 ] \
+   && [ "${SNIPER:-0}" -ge 1 ] && [ "${MOTHER:-0}" -ge 1 ] && [ -z "$NEWMISS" ] \
    && [ -z "$MISSING" ] && [ "${FAILS:-1}" = "0" ] \
    && echo "$LOADED" | grep -qE 'loaded best=[1-9]'; then
   echo "PASS: autopilot flew, shot, killed, triggered events, fired all 5 super themes and a bomb,"

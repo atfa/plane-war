@@ -12,6 +12,7 @@ SRC="src/dev/termux/planewar/Tuning.java
 src/dev/termux/planewar/Super.java
 src/dev/termux/planewar/Boss.java
 src/dev/termux/planewar/Weapon.java
+src/dev/termux/planewar/Wave.java
 test/TestLogic.java
 test/TestBoss.java"
 

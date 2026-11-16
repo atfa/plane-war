@@ -72,7 +72,28 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
-## 步骤 4 已落地（武器多样化）
+## 步骤 5 已落地（新敌机 + 编队）
+
+（步骤 4 的说明见 git log `f958e24` 与 README。）
+
+
+- 新纯 Java `Wave.java`：`size(kind,diff,ramp)`（难度/时长 ramp，上限 8-9）、`lanes(kind,n)`
+  返回 [0,1] 分数（View 映射为 `dp(30) + lane*(W-dp(60))`，保证屏内）、`delays`、
+  `gapIndex`（缺口墙永远一个内部空位）、新 type 常量 `SPLITTER=5/MINER=6/SNIPER=7/MOTHER=8`。
+- 新敌机：分裂体（死亡裂 2，`room < 2` 不裂，子体 type=0 不递归）、布雷艇（雷 = 敌弹 `Bullet.mine`，
+  所以 `clearEnemyBullets()` 入口（炸弹/超必杀/BOSS 死亡）会一并清掉，日志 `clear mines=n`）、
+  狙击手（0.7s 红色锁定线，矄准点只锁一次不跟随）、母舰（产兵条件 `enemies.size() <= D_CAP-6`，
+  给 BOSS 召唤留名额）。
+- 所有清弹入口已改走 `clearEnemyBullets()`（包括 `Super` 清弹主题、炸弹、`killBoss`）。
+- 钩子 `--ei wave N`（延迟到开局后生效：intent 钩子在 `resetRun()` 前跑，直接写 `pending` 会被清空）；
+  新 type 出生即行动（`fire=0.05f`），否则 autopilot 高 DPS 会在 1s 内把它们打掉，日志抓不到。
+- `gameover` 末尾追加 ` wave= split= mine= sniper= mother=`；`test.sh` 断言 4 种新 type 全部出现、
+  `wave kind=`/`split n=`/`mine n=`/`sniper aim`/`mother spawn` 均 >= 1。
+- JVM 断言 601 → 7855 项（编队坐标在 320/700/1400 三种宽度下均不越界、缺口墙恰好一个空位、
+  size 单调与上限、新 type 编号不重号）。
+- 实测：`./test_jvm.sh` 7855 + boss 54654 全绿；`DIFF=1 ./test.sh` 连续两轮 PASS
+  （formations=8-9、split=1、mines=2、sniper=2、mother=1-5、boss killed=1、fps 60.2）。
+
 
 - 新纯 Java `Weapon.java`：`pattern(level)` 弹形表（flat triples offset_dp/angle/dmgScale，LV1-5 = 1/2/3/4/6 发）、
   `spreadScale(5)=1.25`、`missiles(level)`={0,0,0,2,2,3}、`LASER_SEC=8`/`HOMING_SEC=12`、
