@@ -179,6 +179,9 @@ public class Boss {
         return p;
     }
 
+    /** convenience for callers that do not care about minion slots (tests, simple patterns) */
+    public int act(float dt) { return act(dt, 99); }
+
     /**
      * Tick the attack timers and collect the actions the view should perform this frame.
      *
