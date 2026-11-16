@@ -457,7 +457,9 @@ public class GameView extends View {
         for (int i = 0; i < n; i++) {
             pending.add(new float[]{1.0f + i * 1.6f, -2f, i % Wave.COUNT});
             // the four new types are queued too, so a 26s field run sees every one of them
-            pending.add(new float[]{1.3f + i * 1.6f, 5 + (i % 4), -1f});
+            // the mothership goes first: it needs the most runway to be seen producing minions
+            int[] order = {Wave.MOTHER, Wave.SPLITTER, Wave.MINER, Wave.SNIPER};
+            pending.add(new float[]{1.3f + i * 1.6f, order[i % order.length], -1f});
         }
         Log.i(TAG, "wave hook armed n=" + n);
     }
@@ -1362,11 +1364,16 @@ public class GameView extends View {
                     e.fire -= dt * slow;
                     if (e.fire <= 0) {
                         e.fire = ef(2.6f);
-                        // the minions must not eat the boss summon slots, so keep a fat reserve
-                        if (enemies.size() <= D_CAP[diff] - 6) {
+                        // only a live boss reserves summon slots; otherwise the mothership is
+                        // allowed to fill the field, which is its whole identity
+                        int cap = bossAlive() ? D_CAP[diff] - 6 : D_CAP[diff];
+                        if (enemies.size() < cap) {
                             spawnEnemy(0, e.x + (rnd.nextFloat() * 2 - 1) * dp(30));
                             motherSpawns++;
                             Log.i(TAG, "mother spawn n=" + motherSpawns);
+                        } else if (motherBlocks < 3) {
+                            motherBlocks++;
+                            Log.i(TAG, "mother blocked room=" + (cap - enemies.size()) + " cap=" + cap);
                         }
                     }
                     break;
@@ -1397,7 +1404,7 @@ public class GameView extends View {
         }
     }
 
-    int sniperShots, motherSpawns, minesDropped, splits;
+    int sniperShots, motherSpawns, minesDropped, splits, motherBlocks;
 
     /** a splitter breaks into two grunts; capped, and the children never split again */
     private void splitEnemy(Enemy e) {

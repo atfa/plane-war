@@ -91,8 +91,12 @@
   `wave kind=`/`split n=`/`mine n=`/`sniper aim`/`mother spawn` 均 >= 1。
 - JVM 断言 601 → 7855 项（编队坐标在 320/700/1400 三种宽度下均不越界、缺口墙恰好一个空位、
   size 单调与上限、新 type 编号不重号）。
-- 实测：`./test_jvm.sh` 7855 + boss 54654 全绿；`DIFF=1 ./test.sh` 连续两轮 PASS
-  （formations=8-9、split=1、mines=2、sniper=2、mother=1-5、boss killed=1、fps 60.2）。
+- 实测：`./test_jvm.sh` 7855 + boss 54654 全绿；`DIFF=1 ./test.sh` 连续三轮 PASS
+  （formations=7-8、split=1、mines=1-3、sniper=2、mother=6、boss killed=1、fps 60.2）。
+- Tony 首轮复现 FAIL（`mother=0`）：`mother spawn` 只在产兵时打印，而产兵门限 `D_CAP-6`
+  在 autopilot 打满屏幕时永不满足 → 断言不可达。修法：6 个名额的预留只在 **BOSS 存活期间**生效
+  （`bossAlive()` 时才用 `D_CAP-6`），门限不满足时打一次 `mother blocked room=n cap=`；
+  `--ei wave` 的强制新机型把母舰排第一（t≈1.3s）给它最多跑道。
 
 
 - 新纯 Java `Weapon.java`：`pattern(level)` 弹形表（flat triples offset_dp/angle/dmgScale，LV1-5 = 1/2/3/4/6 发）、
