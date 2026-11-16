@@ -82,6 +82,39 @@ public final class Tuning {
         return combo >= FEVER_COMBO;
     }
 
+    // ------------------------------------------------------------ difficulty tables
+    //
+    // These used to live in GameView, where no JVM test could reach them: the on-screen enemy cap
+    // is what the boss summons, the mothership and the splitter all fight over, so it is exactly
+    // the kind of number that must be assertable off-device.
+
+    /** enemy spawn interval multiplier (lower = faster) */
+    public static final float[] SPAWN = {1.00f, 0.70f, 0.48f};
+    /** formation size multiplier */
+    public static final float[] NUM = {1.00f, 1.25f, 1.55f};
+    /** enemy hp multiplier */
+    public static final float[] HP = {1.00f, 1.35f, 1.80f};
+    /** enemy movement and bullet speed multiplier */
+    public static final float[] SPEED = {1.00f, 1.15f, 1.32f};
+    /** enemy fire-rate multiplier */
+    public static final float[] FIRE = {1.00f, 1.35f, 1.75f};
+    /** event interval multiplier (lower = more often) */
+    public static final float[] EVENT = {1.00f, 0.85f, 0.70f};
+    /** power-up drop multiplier */
+    public static final float[] DROP = {1.00f, 0.85f, 0.70f};
+    /** score multiplier */
+    public static final float[] SCORE = {1.00f, 1.25f, 1.60f};
+    /** ramp speed multiplier */
+    public static final float[] RAMP = {1.00f, 1.35f, 1.70f};
+    /** on-screen enemy cap - the budget every summoner shares */
+    public static final int[] ENEMY_CAP = {22, 28, 34};
+
+    public static float spawnScale(int d) { return SPAWN[clampDiff(d)]; }
+    public static float hpScale(int d) { return HP[clampDiff(d)]; }
+    public static float speedScale(int d) { return SPEED[clampDiff(d)]; }
+    public static float scoreScale(int d) { return SCORE[clampDiff(d)]; }
+    public static int enemyCap(int d) { return ENEMY_CAP[clampDiff(d)]; }
+
     // ------------------------------------------------------------ polish (hit-stop, streaks)
 
     /** kill counts that earn a streak banner, ascending */

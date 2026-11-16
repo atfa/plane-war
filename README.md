@@ -111,6 +111,10 @@ DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 
 `test_jvm.sh` 只编译不 import Android 的纯逻辑类（`Tuning.java`、`Super.java`、`Boss.java`、
 `Weapon.java`、`Wave.java`）+ `test/TestLogic.java` / `test/TestBoss.java`；
+脚本会先检查这 5 个类没有 `import android`（有就 FAIL），再跑两套断言
+（当前 7921 + 54654 项）：难度表单调与同屏上限 22/28/34、擦弹几何、狂热阈值、超必杀主题表、
+BOSS 阶段阈值/不可逆/召唤上限/活性、编队坐标在 320/700/1400 三种宽度下不越界、弹形表与锁定选择、
+连杀里程碑与顿帧预算。
 新玩法的数值一律先进这些类，保证能在 JVM 上断言。
 
 用 intent 参数驱动游戏，不需要点击屏幕：

@@ -28,6 +28,7 @@ public class TestLogic {
         weapons();
         waves();
         polish();
+        difficultyTables();
         System.out.println(failed == 0
                 ? "OK: " + checks + " checks passed"
                 : "FAILED: " + failed + "/" + checks + " checks failed");
@@ -162,6 +163,31 @@ public class TestLogic {
                 "the per-second budget caps hit-stop, so a streak cannot freeze the game solid");
         ok(Tuning.MAX_DANGER_ARROWS >= 1 && Tuning.MAX_DANGER_ARROWS <= 8,
                 "edge arrows are capped, so a full screen of threats does not spam the HUD");
+    }
+
+    static void difficultyTables() {
+        System.out.println("[Difficulty]");
+        float[][] tables = {Tuning.SPAWN, Tuning.NUM, Tuning.HP, Tuning.SPEED, Tuning.FIRE,
+                Tuning.EVENT, Tuning.DROP, Tuning.SCORE, Tuning.RAMP};
+        String[] names = {"spawn", "num", "hp", "speed", "fire", "event", "drop", "score", "ramp"};
+        for (int i = 0; i < tables.length; i++) {
+            ok(tables[i].length == 3, "one entry per difficulty: " + names[i]);
+            for (int d = 0; d < 3; d++) ok(tables[i][d] > 0f, "no zero or negative multiplier: " + names[i]);
+        }
+        ok(Tuning.ENEMY_CAP.length == 3, "one enemy cap per difficulty");
+        ok(Tuning.ENEMY_CAP[0] == 22 && Tuning.ENEMY_CAP[1] == 28 && Tuning.ENEMY_CAP[2] == 34,
+                "the on-screen caps are exactly the documented 22/28/34");
+        ok(Tuning.ENEMY_CAP[0] < Tuning.ENEMY_CAP[1] && Tuning.ENEMY_CAP[1] < Tuning.ENEMY_CAP[2],
+                "harder means a higher cap, so every summoner budget grows together");
+        ok(Tuning.hpScale(0) < Tuning.hpScale(1) && Tuning.hpScale(1) < Tuning.hpScale(2),
+                "enemy hp grows with difficulty");
+        ok(Tuning.scoreScale(0) < Tuning.scoreScale(2), "harder pays more score");
+        ok(Tuning.spawnScale(2) < Tuning.spawnScale(0), "harder spawns faster (lower interval)");
+        ok(Tuning.speedScale(0) < Tuning.speedScale(2), "harder moves faster");
+        ok(Tuning.enemyCap(0) == Tuning.enemyCap(-5) && Tuning.enemyCap(2) == Tuning.enemyCap(99),
+                "out-of-range difficulties clamp instead of throwing");
+        // the caps every summoner shares must leave room for a boss summon (2 minions)
+        for (int d = 0; d < 3; d++) ok(Tuning.enemyCap(d) >= 22, "a boss summon always has room");
     }
 
     static boolean Tununing(float v) { return v > 0f && v <= 0.1f; }

@@ -72,6 +72,18 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
+## 步骤 8 已落地（纯逻辑拆文件 + JVM 单测）
+
+- 难度表从 `GameView` 搬进 `Tuning`（`SPAWN/NUM/HP/SPEED/FIRE/EVENT/DROP/SCORE/RAMP/ENEMY_CAP`
+  + `spawnScale/hpScale/speedScale/scoreScale/enemyCap`），GameView 保留 `D_*` 别名指向 Tuning，
+  调用点零改动。同屏上限（22/28/34）是 BOSS 召唤、母舰、分裂体共享的预算，终于能在 JVM 上断言。
+- `test_jvm.sh` 加"纯逻辑类不得 `import android`"的守卫（命中就 FAIL 并列出文件）。
+- 新增 `[Difficulty]` 断言：三档长度、全正、hp/score/speed 单调、spawn 反向、上限精确 22/28/34
+  且严格递增、越界难度 clamp、每档都给 BOSS 召唤留够 2 个名额。
+- 断言总数：TestLogic 7874 → 7921，TestBoss 54654。
+- 实测：`./test_jvm.sh` 7921 + 54654 全绿；`./build.sh` ok（78633 字节）；
+  `DIFF=1 ./test.sh` PASS（score=119407、natural graze=21、boss killed=1、fps 60.2、19 sfx）。
+
 ## 步骤 7 已落地（测试/文档收尾）
 
 - **断言去随机化（Tony 两次裁决的同一类问题）**：`sniper aim=`（实际开火）与 `split n=`（实际分裂）

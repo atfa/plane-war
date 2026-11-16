@@ -76,16 +76,18 @@ public class GameView extends View {
     static final String[] DIFF_NAME = {"简单", "普通", "困难"};
     static final int[] DIFF_COL = {Color.rgb(96, 236, 176), GOLD, Color.rgb(255, 108, 108)};
     static final int DIFF_STD = 0;
-    static final float[] D_SPAWN = {1.00f, 0.70f, 0.48f};
-    static final float[] D_NUM   = {1.00f, 1.25f, 1.55f};   // wave sizes
-    static final float[] D_HP    = {1.00f, 1.35f, 1.80f};
-    static final float[] D_SPEED = {1.00f, 1.15f, 1.32f};
-    static final float[] D_FIRE  = {1.00f, 1.35f, 1.75f};   // enemy fire rate
-    static final float[] D_EVENT = {1.00f, 0.85f, 0.70f};   // event interval
-    static final float[] D_DROP  = {1.00f, 0.85f, 0.70f};   // power-up drops
-    static final float[] D_SCORE = {1.00f, 1.25f, 1.60f};
-    static final float[] D_RAMP  = {1.00f, 1.35f, 1.70f};   // how fast it heats up
-    static final int[] D_CAP     = {22, 28, 34};
+    // the difficulty tables now live in Tuning (pure Java, asserted by plane/test_jvm.sh);
+    // these aliases keep the call sites unchanged
+    static final float[] D_SPAWN = Tuning.SPAWN;
+    static final float[] D_NUM   = Tuning.NUM;
+    static final float[] D_HP    = Tuning.HP;
+    static final float[] D_SPEED = Tuning.SPEED;
+    static final float[] D_FIRE  = Tuning.FIRE;
+    static final float[] D_EVENT = Tuning.EVENT;
+    static final float[] D_DROP  = Tuning.DROP;
+    static final float[] D_SCORE = Tuning.SCORE;
+    static final float[] D_RAMP  = Tuning.RAMP;
+    static final int[] D_CAP     = Tuning.ENEMY_CAP;
     static final float BULLET_SPEED = 1050f;
     static final int MAX_WEAPON = 5;
 
