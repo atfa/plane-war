@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
             if (sa > 0) view.hookSuperAll(sa);
             int gz = b.getInt("graze", 0);
             if (gz > 0) view.hookGraze(gz);
+            int bs = b.getInt("boss", 0);
+            if (bs > 0) view.hookBoss(bs);
             int die = b.getInt("autodie", 0);
             if (die > 0) view.setAutoDie(die);
             if (b.containsKey("vibrate")) view.setVibe(b.getBoolean("vibrate", true));

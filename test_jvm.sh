@@ -10,6 +10,7 @@ mkdir -p "$OUT"
 
 SRC="src/dev/termux/planewar/Tuning.java
 src/dev/termux/planewar/Super.java
+src/dev/termux/planewar/Boss.java
 test/TestLogic.java"
 
 out=$(javac -nowarn -d "$OUT" $SRC 2>&1)

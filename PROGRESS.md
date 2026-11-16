@@ -10,7 +10,7 @@
 |---|---|---|
 | 1 | 能量超必杀 + 炸弹库存 | ✅ 已提交 `531ba82`，已提交验证（REVIEW） |
 | 2 | 擦弹 graze + 连击狂热 | ✅ 已提交，已提交验证 |
-| 3 | 多阶段 BOSS 战（`[goal]`） | 待做 |
+| 3 | 多阶段 BOSS 战（`[goal]`） | ✅ 已提交，已签 EXECUTE |
 | 4 | 武器多样化（追踪导弹 / 激光） | 待做 |
 | 5 | 4 种新敌机 + 编队调度器 | 待做 |
 | 6 | 表现打磨（顿帧 / 连杀横幅 / 危险提示） | 待做 |
@@ -72,9 +72,23 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
-## 步骤 3 起手式（多阶段 BOSS，`[goal]` 双签）
+## 步骤 3 已落地（BOSS）
 
-- 必须加 `--ei boss N` 钩子：`autodie 26` 永远到不了 t=80s。
+- `Boss.java`（纯 Java）：3 种轮换 `pick()`、`hpFor(kind,diff)=HP[]×(1+0.35d)`（再 ×(1+0.25×已击杀数)）、
+  阶段阈值 `PHASE_AT={1,0.66,0.33}`（不可逆）、`act(dt, freeSlots)` 返回 `ACT_RING/AIM/FAN/SUMMON/DIE`
+  位掩码（DIE 锁存只报一次）、`summonCount()` / `summonCount(room)`（room<2 不召唤）、
+  `maxGapSec(phase,diff)` 活性保证（相位越深间隔越短）。
+- GameView 集成：登场横幅+下滑运镜、顶部血条（`topPad+dp(34)`，高 dp(12)，带阶段刻度，不压 HUD pill）、
+  弹幕相位翻译、ram 扣血、技能（blast/damageAll）与炸弹对 BOSS 有效、击杀：全屏清弹 + 慢动作
+  + 大额分数 + 必掉三件道具。`stats` 的 `boss=` 现在输出 `存活/剩余hp`。
+- 钩子 `--ei boss N`（t=6s）；日志 `boss spawn name= hp= kind= phase= gap= n=` / `boss killed` / `boss summon n=`。
+- 调平：BOSS 基础血量从 420 一路降到 `{80,110,140}`（实测 autopilot 对 BOSS 只有 ~11 dps，
+  20s 窗口内必须能杀）；autopilot 现在会把 BOSS 当目标（`d < be*2.5`）且 BOSS 在场时肯用超必杀/炸弹。
+- JVM 断言 148 → 527 项（Tony 的 `test/TestBoss.java` 另加 43913 项）。
+- 实测：`DIFF=1 ./test.sh` 连续两轮 PASS（score≈23k~30k，boss spawn=1 killed=1 summon=2，fever=1，fps 60.2）。
+
+
+- 必须加 `--ei boss N` 钩子：已做（步骤 3）。
 - BOSS 血条高度 <= dp(14)，放在 `topPad` 下方，登场用现有 `banner()`，不堆 HUD。
 - 同屏敌机上限：简单 22 / 普通 28 / 困难 34（BOSS 召唤杂兵要走这个 cap）。
 - 建议拆 `Boss.java`（纯 Java 3 阶段状态机，输出开火/召唤请求），配套 JVM 断言。

@@ -24,6 +24,7 @@ public class TestLogic {
         tuning();
         superThemes();
         grazeAndFever();
+        bossFight();
         System.out.println(failed == 0
                 ? "OK: " + checks + " checks passed"
                 : "FAILED: " + failed + "/" + checks + " checks failed");
@@ -169,5 +170,118 @@ public class TestLogic {
         ok(Tuning.FEVER_SCORE_MULT > 1f, "fever pays more");
         ok(Tuning.FEVER_FIRE_RATE > 0f && Tuning.FEVER_FIRE_RATE < 1f,
                 "fever fires faster (gap multiplier " + Tuning.FEVER_FIRE_RATE + ")");
+    }
+
+    /** the boss state machine: phases, caps, liveness, death */
+    static void bossFight() {
+        ok(Boss.COUNT == 3 && Boss.NAME.length == Boss.COUNT && Boss.SUB.length == Boss.COUNT
+                && Boss.COLOR.length == Boss.COUNT && Boss.RADIUS_DP.length == Boss.COUNT
+                && Boss.SCORE.length == Boss.COUNT, "boss tables all match COUNT");
+        ok(Boss.pick(0) == 0 && Boss.pick(1) == 1 && Boss.pick(2) == 2,
+                "the three bosses rotate in order");
+        ok(Boss.pick(3) == 0 && Boss.pick(-1) == Boss.COUNT - 1, "pick() wraps both ways");
+        java.util.HashSet<Integer> seen = new java.util.HashSet<Integer>();
+        for (int i = 0; i < 30; i++) seen.add(Boss.pick(i));
+        ok(seen.size() == Boss.COUNT, "30 fights cover every boss");
+
+        // phase thresholds: descending, inside (0,1], and the edges are exact
+        for (int i = 1; i < Boss.PHASES; i++)
+            ok(Boss.PHASE_AT[i] < Boss.PHASE_AT[i - 1], "phase thresholds descend at " + i);
+        ok(Boss.phaseFor(1f) == 0, "full hp is phase 0");
+        ok(Boss.phaseFor(0.66f) == 1 && Boss.phaseFor(0.661f) == 0, "phase 1 starts at exactly 66%");
+        ok(Boss.phaseFor(0.33f) == 2 && Boss.phaseFor(0.331f) == 1, "phase 2 starts at exactly 33%");
+        ok(Boss.phaseFor(0f) == 2 && Boss.phaseFor(-1f) == 2, "empty bar is the last phase");
+
+        // hp scales up with difficulty and with the number of bosses already killed
+        for (int k = 0; k < Boss.COUNT; k++) {
+            ok(Boss.hpFor(k, 1) > Boss.hpFor(k, 0) && Boss.hpFor(k, 2) > Boss.hpFor(k, 1),
+                    "boss " + k + " hp grows with difficulty");
+            ok(Boss.spawn(k, 0, 1).maxHp() > Boss.spawn(k, 0, 0).maxHp(),
+                    "boss " + k + " hp grows after each kill");
+            ok(Boss.spawn(k, 0, 0).kind() == Boss.pick(k), "spawn uses the rotated kind");
+            ok(Boss.spawn(k, 0, 0).hpFrac() == 1f, "a fresh boss is at full hp");
+        }
+        ok(Boss.spawn(99, 7, -3).kind() >= 0 && Boss.spawn(99, 7, -3).maxHp() > 0f,
+                "garbage arguments stay in the table");
+
+        // liveness: no phase may stall for longer than maxGapSec, and later phases are busier
+        ok(Boss.maxGapSec(0, 1) > Boss.maxGapSec(1, 1)
+                && Boss.maxGapSec(1, 1) > Boss.maxGapSec(2, 1), "gap shrinks as phases advance");
+        ok(Boss.maxGapSec(0, 2) < Boss.maxGapSec(0, 0), "higher difficulty fires faster");
+        for (int k = 0; k < Boss.COUNT; k++) {
+            for (int d = 0; d <= 2; d++) {
+                Boss b = Boss.spawn(k, d, 0);
+                float gap = Boss.maxGapSec(b.phase(), d);
+                float since = 0f;
+                float worst = 0f;
+                int shots = 0;
+                for (int f = 0; f < 3600; f++) {          // 60 s at 60 fps
+                    int req = b.act(1f / 60f, 20);
+                    boolean fired = (req & (Boss.ACT_RING | Boss.ACT_AIM | Boss.ACT_FAN)) != 0;
+                    if (fired) { shots++; since = 0f; } else { since += 1f / 60f; }
+                    if (since > worst) worst = since;
+                    if (f == 60) b.hurt(b.hp() * 0.5f);   // drop into phase 1
+                    if (f == 1200) b.hurt(b.hp() * 0.6f); // and later into phase 2
+                    if (b.isDead()) break;
+                }
+                ok(shots > 60, "boss " + k + " diff " + d + " fires a lot over 60s (" + shots + ")");
+                ok(worst <= gap + 0.05f, "boss " + k + " diff " + d + " never stalls: worst gap "
+                        + worst + " <= " + gap);
+            }
+        }
+
+        // summoning only happens in the last phase and never exceeds the free slots
+        for (int k = 0; k < Boss.COUNT; k++) {
+            Boss b = Boss.spawn(k, 0, 0);
+            int req = 0;
+            for (int f = 0; f < 600 && b.phase() < 2; f++) {
+                req = b.act(1f / 30f, 30);
+                ok((req & Boss.ACT_SUMMON) == 0, "no minions before the last phase");
+                if ((req & Boss.ACT_SUMMON) != 0) break;
+                if (f == 100) b.hurt(b.hp() * 0.8f);
+            }
+            b = Boss.spawn(k, 0, 0);
+            b.hurt(b.hp() * 0.8f);                       // force the last phase
+            int got = 0;
+            for (int f = 0; f < 600 && got == 0; f++) {
+                int r = b.act(1f / 30f, 2);
+                if ((r & Boss.ACT_SUMMON) != 0) got = b.summonCount();
+            }
+            ok(got > 0 && got <= 2, "boss " + k + " respects the free-slot cap (got " + got + ")");
+            b = Boss.spawn(k, 0, 0);
+            b.hurt(b.hp() * 0.8f);
+            int n = 0;
+            for (int f = 0; f < 600 && n == 0; f++)
+                if ((b.act(1f / 30f, 1) & Boss.ACT_SUMMON) != 0) n = b.summonCount();
+            ok(n == 0, "boss " + k + " spawns no half formation when only one slot is free");
+        }
+
+        // death: hp clamps at zero, hpFrac stays in [0,1], hurt is a no-op afterwards,
+        // and ACT_DIE is reported exactly once (a double report would double the payout)
+        Boss b = Boss.spawn(0, 0, 0);
+        float step = b.maxHp() / 10f;
+        for (int i = 0; i < 9; i++) {
+            b.hurt(step);
+            ok(b.hpFrac() >= 0f && b.hpFrac() <= 1f, "hpFrac stays in [0,1] while hurt");
+            ok(b.hp() >= 0f, "hp never goes negative");
+        }
+        ok(!b.isDead(), "nine of ten steps is not dead yet");
+        ok(b.hurt(b.maxHp()), "the killing blow reports death");
+        ok(b.hp() == 0f && b.hpFrac() == 0f, "a dead boss sits at exactly zero hp");
+        ok(!b.hurt(10f), "a dead boss cannot be hurt again");
+        int die = 0;
+        for (int f = 0; f < 120; f++)
+            if ((b.act(1f / 60f, 20) & Boss.ACT_DIE) != 0) die++;
+        ok(die == 1, "ACT_DIE is reported exactly once (got " + die + ")");
+        ok(b.act(1f / 60f, 20) == 0, "a dead boss requests nothing after the death report");
+
+        // the phase never walks back: a healed boss keeps the phase it earned
+        Boss c = Boss.spawn(1, 0, 0);
+        c.hurt(c.maxHp() * 0.7f);
+        int p = c.phase();
+        ok(p == 2, "70% damage puts the boss in the last phase");
+        c.hurt(-5f);
+        ok(c.phase() == p, "negative damage does not walk the phase back");
+        ok(c.hpFrac() <= 1f, "negative damage cannot push hp above max");
     }
 }
