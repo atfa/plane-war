@@ -72,7 +72,24 @@
 - 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
   `loaded best=21229`，audio 15 sfx）。
 
-## 当前状态（步骤 3 REVIEW，上下文即将压缩）
+## 步骤 4 已落地（武器多样化）
+
+- 新纯 Java `Weapon.java`：`pattern(level)` 弹形表（flat triples offset_dp/angle/dmgScale，LV1-5 = 1/2/3/4/6 发）、
+  `spreadScale(5)=1.25`、`missiles(level)`={0,0,0,2,2,3}、`LASER_SEC=8`/`HOMING_SEC=12`、
+  `BEAM_TICK=0.15`、`MAX_PLAYER_BULLETS=140`、`pickTarget(...)`（BOSS 作为 index n 的合法目标，
+  屏顶外不参与锁定）。
+- 激光：`fire()` 里 `beamCd` 周期结算，**每 0.15s 对每个目标只扣一次血**（实测 `laser tick n=1`，
+  26s 内共 22 次结算）；追踪导弹：`Bullet.homing`+`target`，`steer()` 每帧转向，目标死亡/离屏自动重锁定。
+- 新道具 `PW_LASER=6` / `PW_HOMING=7`（掉率 4%/4%），HUD pill、颜色、图标、新音效 `AudioFx.LASER`/`MISSILE`
+  （音频 VER 升到 v6，17 个 sfx）。
+- 钩子：`--es powerup laser` / `--es powerup tracking`（t=6s 起在机头上方掎 9 个，走真实 `collect()`）。
+  注意 `powerKind()` 按首字母映射，所以追踪用 **tracking**（`H` 已被维修占用）。
+- `gameover` 行末尾追加 ` missile= laser=`；`test.sh` 断言 `pup kind=laser`/`pup kind=homing`/
+  `missile n=` >= 1 且单次 `laser tick` <= 12。
+- JVM 断言 527 → 601 项（弹形表、导弹表、光束周期、锁定选择）。
+- 实测：`./test_jvm.sh` 601 + boss 54654 全绿；`DIFF=1 ./test.sh` PASS（score=41877、
+  pup laser=9 homing=9、missiles=381、laser tick=1、boss killed=1、fps 60.2、17 sfx）。
+
 
 - Austin HEAD `84c06a6`（ahead 6，worktree 干净）；Tony HEAD `ee026e9`（dirty，正在改）。
 - 我审查 Tony 的 `ee026e9`：Boss.java 是他那份的旧拷贝（add/add 冲突，**INTEGRATE 以我的为准**：

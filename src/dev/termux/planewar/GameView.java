@@ -39,7 +39,8 @@ public class GameView extends View {
     static final int TITLE = 0, RUNNING = 1, PAUSED = 2, OVER = 3;
 
     // power-up kinds
-    static final int PW_WEAPON = 0, PW_SHIELD = 1, PW_HEAL = 2, PW_BOMB = 3, PW_SCORE = 4, PW_RAPID = 5;
+    static final int PW_WEAPON = 0, PW_SHIELD = 1, PW_HEAL = 2, PW_BOMB = 3, PW_SCORE = 4, PW_RAPID = 5,
+            PW_LASER = 6, PW_HOMING = 7;
 
     // ---- palette ----
     static final int BG_TOP = Color.rgb(9, 12, 26);
@@ -276,6 +277,8 @@ public class GameView extends View {
     void resetRun() {
         bullets.clear();
         ebullets.clear();
+        laserT = homingT = beamCd = 0;
+        laserHits = missilesFired = 0;
         enemies.clear();
         powers.clear();
         parts.clear();
@@ -413,15 +416,31 @@ public class GameView extends View {
     }
 
     void hookPower(int kind) {
-        PowerUp p = new PowerUp();
-        p.kind = kind;
-        p.r = dp(16);
-        p.x = sx;
-        p.y = sy - dp(150);
-        p.vx = 0;
-        p.vy = dp(70);
-        p.t = 0;
-        powers.add(p);
+        // spawn it a few seconds into the run, stacked right above the ship: at launch sx/sy are not
+        // laid out yet and reset() clears the field, so a power-up added from the intent hook would
+        // never be collected and the hook would prove nothing
+        hookQueue.add(kind);
+        if (hookPowerIn <= 0) hookPowerIn = 6f + hookPowerSeq++ * 1.5f;
+    }
+
+    int hookPowerKind = -1, hookPowerSeq;
+    float hookPowerIn;
+    final ArrayList<Integer> hookQueue = new ArrayList<Integer>();
+
+    private void spawnHookPower() {
+        hookPowerKind = hookQueue.size() > 0 ? hookQueue.remove(0) : -1;
+        for (int i = 0; i < 9; i++) {
+            PowerUp p = new PowerUp();
+            p.kind = hookPowerKind;
+            p.r = dp(16);
+            p.x = sx + ((i % 3) - 1) * dp(26);
+            p.y = sy - dp(50) - (i / 3) * dp(46);
+            p.vx = 0;
+            p.vy = dp(170);
+            p.t = 0;
+            powers.add(p);
+        }
+        Log.i(TAG, "pup hook drop kind=" + hookPowerKind);
     }
 
     void hookSpawn(int type) { spawnEnemy(type, W / 2f); }
@@ -697,6 +716,13 @@ public class GameView extends View {
 
         steer(dt);
         fire(dt);
+        if (!hookQueue.isEmpty()) {
+            hookPowerIn -= dt;
+            if (hookPowerIn <= 0) {
+                spawnHookPower();
+                hookPowerIn = 1.5f;
+            }
+        }
         moveBullets(dt);
         moveEnemies(dt);
         movePowers(dt);
@@ -819,7 +845,17 @@ public class GameView extends View {
         return a;
     }
 
+    float laserT, homingT, beamCd;      // laser beam / lock-on power-up timers, beam settlement cooldown
+    int laserHits, missilesFired;       // totals for the log lines
+
     private void fire(float dt) {
+        laserT -= dt;
+        homingT -= dt;
+        beamCd -= dt;
+        if (laserT > 0 && Weapon.beamDue(beamCd, dt)) {
+            beamCd = Weapon.beamCooldown();
+            beamSettle();
+        }
         fireTimer -= dt;
         float gap = rapidT > 0 || frenzyT > 0 ? 0.065f : 0.135f;
         if (feverActive()) gap *= Tuning.FEVER_FIRE_RATE;
@@ -830,34 +866,14 @@ public class GameView extends View {
         float dmg = 1f + (weapon - 1) * 0.35f;
         int col = frenzyT > 0 ? Color.rgb(255, 170, 90) : BULLET;
         // off = sideways offset (perpendicular to the heading), a = extra angle
-        switch (weapon) {
-            case 1:
-                shot(0, 0, sp, dmg, col);
-                break;
-            case 2:
-                shot(-dp(7), 0, sp, dmg, col);
-                shot(dp(7), 0, sp, dmg, col);
-                break;
-            case 3:
-                shot(0, 0, sp, dmg, col);
-                shot(-dp(8), 0.10f, sp, dmg, col);
-                shot(dp(8), -0.10f, sp, dmg, col);
-                break;
-            case 4:
-                shot(-dp(6), 0, sp, dmg, col);
-                shot(dp(6), 0, sp, dmg, col);
-                shot(-dp(11), 0.20f, sp, dmg, col);
-                shot(dp(11), -0.20f, sp, dmg, col);
-                break;
-            default:
-                shot(-dp(6), 0, sp, dmg, col);
-                shot(dp(6), 0, sp, dmg, col);
-                shot(-dp(14), 0, sp, dmg * 0.8f, col);
-                shot(dp(14), 0, sp, dmg * 0.8f, col);
-                shot(-dp(16), 0.28f, sp, dmg * 0.9f, col);
-                shot(dp(16), -0.28f, sp, dmg * 0.9f, col);
-                break;
+        float[] pat = Weapon.pattern(weapon);
+        float spread = Weapon.spreadScale(weapon);
+        for (int i = 0; i + 2 < pat.length; i += 3) {
+            shot(pat[i] * spread * dp, pat[i + 1], sp, dmg * pat[i + 2], col);
         }
+        // lock-on missiles: only while the 追踪 power-up is live, and only from LV3 up
+        int ms = homingT > 0 ? Weapon.missiles(weapon) : 0;
+        for (int i = 0; i < ms; i++) missile(sp, dmg * 1.6f, i == 0 ? -dp(12) : dp(12));
         // muzzle flash
         Particle p = new Particle();
         p.kind = 4;
@@ -882,6 +898,92 @@ public class GameView extends View {
         b.life = a == 0 ? 1.5f : 1.3f;
         b.color = col;
         bullets.add(b);
+    }
+
+    /** homing missile: locks the nearest legal target (the boss included) and steers onto it */
+    private void missile(float off, float dmg, float sp) {
+        if (bullets.size() >= Weapon.MAX_PLAYER_BULLETS) return;
+        Bullet b = new Bullet();
+        b.x = sx + off;
+        b.y = sy - dp(8);
+        b.vx = 0;
+        b.vy = -sp;
+        b.r = dp(5f);
+        b.dmg = dmg;
+        b.life = 2.4f;
+        b.color = Color.rgb(255, 150, 60);
+        b.homing = true;
+        b.target = Weapon.pickTarget(tx, ty, tn(), bossAlive(), bossX, bossY, sx, sy, -dp(20));
+        bullets.add(b);
+        missilesFired++;
+        if (missilesFired % 10 == 1) Log.i(TAG, "missile n=" + missilesFired);
+        audio.play(AudioFx.MISSILE, 1f);
+    }
+
+    /** the laser column: one settlement per target per Weapon.BEAM_TICK, never one per frame */
+    private void beamSettle() {
+        float half = Weapon.BEAM_HALF_DP * dp;
+        int hit = 0;
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy e = enemies.get(i);
+            if (e.hp <= 0 || Math.abs(e.x - sx) > half + e.r) continue;
+            e.hp -= Weapon.BEAM_DMG;
+            hit++;
+            if (e.hp <= 0) killEnemy(e, i);
+        }
+        if (boss != null && !boss.isDead() && bossEnter > 1.2f && Math.abs(bossX - sx) < half + bossRadius()) {
+            boss.hurt(Weapon.BEAM_DMG);
+            hit++;
+        }
+        laserHits += hit;
+        Particle p = new Particle();
+        p.kind = 1;
+        p.x = sx;
+        p.y = sy - dp(60);
+        p.life = p.max = 0.18f;
+        p.size = dp(30);
+        p.color = Color.rgb(120, 255, 235);
+        parts.add(p);
+        if (hit > 0 && laserHits % 20 < 20) Log.i(TAG, "laser tick n=" + hit + " total=" + laserHits);
+    }
+
+    /** number of live enemies, for the pure-JVM target picker */
+    private int tn() {
+        int n = 0;
+        for (Enemy e : enemies) { tx[n] = e.x; ty[n] = e.y; n++; }
+        return n;
+    }
+
+    private boolean bossAlive() { return boss != null && !boss.isDead(); }
+
+    private float bossRadius() { return bossR(); }
+
+    /** scratch arrays for the pure-JVM target picker (no allocation per frame) */
+    final float[] tx = new float[64], ty = new float[64];
+
+    /** steer a missile onto its locked target, re-acquiring when it dies or leaves the screen */
+    private void steer(Bullet b, float dt) {
+        int n = tn();
+        float cx = 0, cy = 0;
+        boolean live = false;
+        if (b.target >= 0 && b.target < n) { cx = tx[b.target]; cy = ty[b.target]; live = true; }
+        else if (b.target == n && bossAlive()) { cx = bossX; cy = bossY; live = true; }
+        if (!live) {
+            b.target = Weapon.pickTarget(tx, ty, n, bossAlive(), bossX, bossY, sx, sy, -dp(20));
+            if (b.target < 0) return;
+            if (b.target < n) { cx = tx[b.target]; cy = ty[b.target]; }
+            else { cx = bossX; cy = bossY; }
+        }
+        float a = (float) Math.atan2(cy - b.y, cx - b.x);
+        float ca = (float) Math.atan2(b.vy, b.vx);
+        float da = a - ca;
+        while (da > (float) Math.PI) da -= 2 * (float) Math.PI;
+        while (da < -(float) Math.PI) da += 2 * (float) Math.PI;
+        float turn = (float) Math.min(Math.abs(da), 4.2f * dt) * (da > 0 ? 1 : -1);
+        float sp = (float) Math.hypot(b.vx, b.vy);
+        ca += turn;
+        b.vx = (float) Math.cos(ca) * sp;
+        b.vy = (float) Math.sin(ca) * sp;
     }
 
     // ------------------------------------------------------------------ spawning
@@ -971,7 +1073,8 @@ public class GameView extends View {
     private void spawnRandomPower(float x, float y) {
         double r = rnd.nextDouble();
         int k = r < 0.30 ? PW_WEAPON : r < 0.48 ? PW_SHIELD : r < 0.62 ? PW_HEAL
-                : r < 0.76 ? PW_SCORE : r < 0.90 ? PW_RAPID : PW_BOMB;
+                : r < 0.72 ? PW_SCORE : r < 0.84 ? PW_RAPID : r < 0.92 ? PW_BOMB
+                : r < 0.96 ? PW_LASER : PW_HOMING;
         spawnPower(k, x, y);
     }
 
@@ -1062,6 +1165,7 @@ public class GameView extends View {
     private void moveBullets(float dt) {
         for (int i = bullets.size() - 1; i >= 0; i--) {
             Bullet b = bullets.get(i);
+            if (b.homing) steer(b, dt);
             b.x += b.vx * dt;
             b.y += b.vy * dt;
             b.life -= dt;
@@ -1357,6 +1461,20 @@ public class GameView extends View {
                 floatText(sx, sy - dp(40), "+" + pts, powerColor(PW_SCORE), dp(20));
                 break;
             }
+            case PW_LASER:
+                laserT = Weapon.LASER_SEC;
+                audio.play(AudioFx.LASER, 1f);
+                floatText(sx, sy - dp(40), "激光 " + (int) Weapon.LASER_SEC + " 秒", powerColor(PW_LASER), dp(19));
+                Log.i(TAG, "pup kind=laser t=" + Weapon.LASER_SEC);
+                break;
+            case PW_HOMING:
+                homingT = Weapon.HOMING_SEC;
+                // 追踪弹挂在 LV3 以上的炮台上；拾取时直接解锁，否则道具在低火力下是空报
+                if (weapon < 3) weapon = 3;
+                audio.play(AudioFx.MISSILE, 1f);
+                floatText(sx, sy - dp(40), "追踪 " + (int) Weapon.HOMING_SEC + " 秒", powerColor(PW_HOMING), dp(19));
+                Log.i(TAG, "pup kind=homing t=" + Weapon.HOMING_SEC);
+                break;
             default:
                 rapidT = 9f;
                 floatText(sx, sy - dp(40), "速射 9 秒", powerColor(PW_RAPID), dp(19));
@@ -1646,7 +1764,8 @@ public class GameView extends View {
                 score, kills, (int) time, diff);
         Log.i(TAG, "gameover score=" + score + " kills=" + kills + " time=" + (int) time
                 + " rank=" + rank + " events=" + eventsSeen + " diff=" + DIFF_NAME[diff]
-                + " superFails=" + superFails + " graze=" + graze);
+                + " superFails=" + superFails + " graze=" + graze + " missile=" + missilesFired
+                + " laser=" + laserHits);
         if (rank >= 0) {
             ui.postDelayed(new Runnable() {
                 @Override public void run() { promptName(rank); }
@@ -2120,6 +2239,8 @@ public class GameView extends View {
             case PW_BOMB: return Color.rgb(255, 112, 112);
             case PW_SCORE: return Color.rgb(255, 220, 120);
             case PW_RAPID: return Color.rgb(230, 140, 255);
+            case PW_LASER: return Color.rgb(120, 255, 235);
+            case PW_HOMING: return Color.rgb(255, 150, 60);
             default: return Color.rgb(255, 190, 80);
         }
     }
@@ -2131,6 +2252,8 @@ public class GameView extends View {
             case PW_BOMB: return "爆";
             case PW_SCORE: return "分";
             case PW_RAPID: return "速";
+            case PW_LASER: return "激光";
+            case PW_HOMING: return "追";
             default: return "火";
         }
     }
@@ -2482,6 +2605,8 @@ public class GameView extends View {
         float py = topPad + dp(48);
         py = pill(c, py, frenzyT > 0, "狂暴", frenzyT, powerColor(PW_RAPID));
         py = pill(c, py, rapidT > 0, "速射", rapidT, powerColor(PW_RAPID));
+        py = pill(c, py, laserT > 0, "激光", laserT, powerColor(PW_LASER));
+        py = pill(c, py, homingT > 0, "追踪", homingT, powerColor(PW_HOMING));
         py = pill(c, py, slowT > 0, "缓速场", slowT, powerColor(PW_SHIELD));
         py = pill(c, py, shield > 0, "护盾 " + shield, -1, powerColor(PW_SHIELD));
         py = pill(c, py, weapon >= MAX_WEAPON, "火力全开", -1, powerColor(PW_WEAPON));

@@ -6,6 +6,8 @@ class Bullet {
     float life;
     int color;
     boolean enemy;
+    boolean homing;        // player missile: steers onto its locked target
+    int target = -1;       // locked index in the enemy list, n = the boss, -1 = unlocked
     float grazeT;         // graze cooldown, so one bullet cannot be farmed every frame
 }
 

@@ -36,6 +36,8 @@ public class MainActivity extends Activity {
             if (b.getBoolean("autostart", false)) autoStart(delay);
             String pu = b.getString("powerup");
             if (pu != null) view.hookPower(powerKind(pu));
+            String pu2 = b.getString("powerup2");
+            if (pu2 != null) view.hookPower(powerKind(pu2));
             int spawn = b.getInt("spawn", -1);
             if (spawn >= 0) view.hookSpawn(spawn);
             int ev = b.getInt("event", -1);
@@ -72,6 +74,8 @@ public class MainActivity extends Activity {
             case 'B': return GameView.PW_BOMB;
             case 'X': return GameView.PW_SCORE;
             case 'F': return GameView.PW_RAPID;
+            case 'L': return GameView.PW_LASER;
+            case 'T': return GameView.PW_HOMING;
             default: return GameView.PW_WEAPON;
         }
     }

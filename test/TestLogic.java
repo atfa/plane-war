@@ -25,10 +25,67 @@ public class TestLogic {
         superThemes();
         grazeAndFever();
         bossFight();
+        weapons();
         System.out.println(failed == 0
                 ? "OK: " + checks + " checks passed"
                 : "FAILED: " + failed + "/" + checks + " checks failed");
         if (failed > 0) System.exit(1);
+    }
+
+    // ---------------------------------------------------------------- Weapon
+
+    static void weapons() {
+        System.out.println("[Weapon]");
+        ok(Weapon.pattern(1).length == 3, "LV1 fires one shot");
+        ok(Weapon.shots(2) == 2 && Weapon.shots(3) == 3 && Weapon.shots(4) == 4,
+                "LV2/3/4 fire 2/3/4 shots");
+        ok(Weapon.shots(5) == 6, "LV5 opens up to six shots");
+        ok(Weapon.shots(0) == 6 && Weapon.shots(99) == 6, "out of range levels clamp to the LV5 pattern");
+        for (int lv = 1; lv <= Weapon.MAX_LEVEL; lv++) {
+            float[] p = Weapon.pattern(lv);
+            ok(p.length % 3 == 0, "pattern is flat triples of offset/angle/damage");
+            for (int i = 0; i < p.length; i += 3) {
+                ok(p[i] >= -20f && p[i] <= 20f, "offset stays inside the hull (dp)");
+                ok(p[i + 1] >= -0.5f && p[i + 1] <= 0.5f, "slant stays narrow enough to be aimed");
+                ok(p[i + 2] > 0f && p[i + 2] <= 1f, "damage scale never exceeds the base shot");
+            }
+        }
+        ok(Weapon.spreadScale(4) == 1f, "LV4 keeps the base spread");
+        ok(Weapon.spreadScale(5) > 1f, "LV5 widens the barrage");
+        ok(Weapon.missiles(1) == 0 && Weapon.missiles(2) == 0, "no missiles below LV3");
+        ok(Weapon.missiles(3) == 2 && Weapon.missiles(5) == 3, "missiles grow with the gun");
+        ok(Weapon.missiles(0) == 0 && Weapon.missiles(99) == 3, "missile table clamps both ends");
+        ok(Weapon.LASER_SEC == 8f && Weapon.HOMING_SEC == 12f, "power-up durations are the design values");
+        ok(Weapon.BEAM_TICK > 0f, "the beam has a settlement period, it is not per-frame");
+        ok(Weapon.beamDue(0f, 0.016f) && !Weapon.beamDue(0.1f, 0.016f),
+                "the beam settles on a period, not every frame - a per-frame beam deletes an 80 hp boss in a second");
+        ok(Weapon.beamCooldown() == Weapon.BEAM_TICK, "the cadence is fixed, so DPS cannot drift");
+        // 60 fps for 8s: a per-frame beam would settle 480 times, a periodic beam 53
+        int ticks = 0;
+        float cd = 0f;
+        for (int f = 0; f < 480; f++) {
+            if (Weapon.beamDue(cd, 1f / 60f)) { ticks++; cd = Weapon.beamCooldown(); }
+            cd -= 1f / 60f;
+        }
+        ok(ticks > 40 && ticks < 70, "one beam over 8s settles about 53 times, not 480");
+
+        // target selection: nearest, boss legal, off-screen ignored, never "none" while something is in play
+        float[] xs = {100f, 300f, 200f};
+        float[] ys = {400f, 400f, 100f};
+        ok(Weapon.pickTarget(xs, ys, 3, false, 0f, 0f, 210f, 420f, -20f) == 1,
+                "the nearest enemy wins (300,400 is 90px away, 100,400 is 110px)");
+        ok(Weapon.pickTarget(xs, ys, 3, true, 205f, 415f, 210f, 420f, -20f) == 3,
+                "the boss is a legal target - it does not live in the enemy list, so forgetting it makes every new weapon useless on a boss wave");
+        ok(Weapon.pickTarget(xs, ys, 3, false, 0f, 0f, 210f, 420f, 200f) == 1,
+                "enemies above the top edge (still spawning) are ignored, so the lock falls back to the closest one in play");
+        ok(Weapon.pickTarget(new float[0], new float[0], 0, false, 0f, 0f, 0f, 0f, -20f) == -1,
+                "nothing on screen means no target");
+        ok(Weapon.pickTarget(new float[0], new float[0], 0, true, 50f, 50f, 0f, 0f, -20f) == 0,
+                "a lone boss is still a target, reported as index n");
+        ok(Weapon.pickTarget(new float[]{1f}, new float[]{-999f}, 1, false, 0f, 0f, 0f, 0f, -20f) == -1,
+                "an off-screen enemy is never locked, so a missile does not chase a spawn off the top");
+        ok(Weapon.MAX_PLAYER_BULLETS >= 60,
+                "player bullets are capped, so LV5 + missiles + laser cannot stack into a frame-time spike");
     }
 
     // ---------------------------------------------------------------- Tuning

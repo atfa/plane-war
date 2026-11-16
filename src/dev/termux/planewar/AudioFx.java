@@ -25,11 +25,11 @@ public class AudioFx {
     public static final String SHOT = "shot", HIT = "hit", KILL = "kill", BIGKILL = "bigkill",
             POWER = "power", SHIELD = "shield", BOMB = "bomb", HURT = "hurt", OVER = "over",
             EVENT = "event", PICK = "pick", START = "start", WALL = "wall", SUPER = "super",
-            GRAZE = "graze";
+            GRAZE = "graze", LASER = "laser", MISSILE = "missile";
 
     private static final String TAG = "planewar";
     private static final int RATE = 22050;
-    private static final String VER = "v5";
+    private static final String VER = "v6";
 
     private final Context ctx;
     private final HashMap<String, Integer> ids = new HashMap<String, Integer>();
@@ -135,7 +135,7 @@ public class AudioFx {
                     }
                 }
             });
-            String[] names = {SHOT, HIT, KILL, BIGKILL, POWER, SHIELD, BOMB, HURT, OVER, EVENT, PICK, START, WALL, SUPER, GRAZE};
+            String[] names = {SHOT, HIT, KILL, BIGKILL, POWER, SHIELD, BOMB, HURT, OVER, EVENT, PICK, START, WALL, SUPER, GRAZE, LASER, MISSILE};
             for (String n : names) {
                 File f = new File(dir, "sfx_" + n + "_" + VER + ".wav");
                 if (!f.exists()) writeWav(f, sfx(n, RATE), RATE);
@@ -241,6 +241,16 @@ public class AudioFx {
             tone(b, rate, 0, 0.07, 2100, 0.10, Wave.SINE);
             tone(b, rate, 0.01, 0.06, 3130, 0.06, Wave.SINE);
             sweep(b, rate, 0, 0.10, 2600, 1500, 0.05, Wave.TRIANGLE);
+        } else if (name.equals(LASER)) {
+            // a rising charged beam hum
+            b = new float[(int) (rate * 0.30)];
+            sweep(b, rate, 0, 0.28, 420, 1600, 0.16, Wave.SAW);
+            tone(b, rate, 0.02, 0.24, 2400, 0.05, Wave.SINE);
+        } else if (name.equals(MISSILE)) {
+            // a short whoosh as a missile leaves the rail
+            b = new float[(int) (rate * 0.18)];
+            noise(b, rate, 0, 0.16, 0.12, 0.85);
+            sweep(b, rate, 0, 0.16, 900, 260, 0.10, Wave.TRIANGLE);
         } else {
             b = new float[(int) (rate * 0.1)];
         }
