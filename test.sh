@@ -83,9 +83,17 @@ HOMEPUP=$(echo "$LOG" | grep -c 'pup kind=homing')
 LASERHIT=$(echo "$LOG" | grep -oE 'laser tick n=[0-9]+' | tail -1 | cut -d= -f2)
 MISSILE=$(echo "$LOG" | grep -oE 'missile n=[0-9]+' | tail -1 | cut -d= -f2)
 WAVE=$(echo "$LOG" | grep -c 'wave kind=')
+# a splitter ENTERING is deterministic; the split itself is skipped when the field is full (DIFF=2),
+# so gate on either, and keep the blocked case visible
 SPLIT=$(echo "$LOG" | grep -c 'split n=')
+SPLIT_SPAWN=$(echo "$LOG" | grep -c 'enemy spawn type=5')
+SPLIT_BLOCK=$(echo "$LOG" | grep -c 'split blocked room=')
 MINE=$(echo "$LOG" | grep -oE 'mine n=[0-9]+' | tail -1 | cut -d= -f2)
-SNIPER=$(echo "$LOG" | grep -cE 'sniper aim( telegraph)?')
+# the sniper must ENTER the field (deterministic); its shot is only diagnostic - on DIFF=2 the
+# autopilot often kills it before the 0.7s telegraph finishes, so gating on "fired" is a coin flip
+SNIPER=$(echo "$LOG" | grep -c 'enemy spawn type=7')
+SNIPE_FIRE=$(echo "$LOG" | grep -c 'sniper aim=')
+SNIPE_TELL=$(echo "$LOG" | grep -c 'sniper aim telegraph')
 MOTHER=$(echo "$LOG" | grep -c 'mother spawn')
 MBLOCK=$(echo "$LOG" | grep -oE 'mother blocked room=[0-9-]+ cap=[0-9]+' | tail -1)
 STREAK=$(echo "$LOG" | grep -oE 'streak n=[0-9]+' | tail -1 | cut -d= -f2)
@@ -118,6 +126,8 @@ echo "boss:    spawn=$BSPAWN killed=$BKILL last summon=${BSUMMON:-none} (3 phase
 echo "polish:  streak=${STREAK:-none} hitstop=$HITSTOP danger=$DANGER (kill streak banners, hit-stop on heavy kills, off-screen threat arrows)"
 echo "waves:   mother blocked: ${MBLOCK:-never}"
 echo "waves:   formations=$WAVE split=$SPLIT mines=${MINE:-none} sniper=${SNIPER:-none} mother=${MOTHER:-none} missing:${NEWMISS:- none}"
+echo "         sniper diagnostics (not gated): telegraph=$SNIPE_TELL fired=$SNIPE_FIRE"
+echo "         splitter diagnostics (not gated): entered=$SPLIT_SPAWN blocked=$SPLIT_BLOCK"
 echo "weapons: pup laser=$LASERPUP pup homing=$HOMEPUP last laser tick=${LASERHIT:-none} missiles=${MISSILE:-none}"
 echo "        (laser must settle once per target per 0.15s, so a tick stays in the single digits)"
 echo "fps:     ${FPS:-none} (rolling average, must be >= 45)"
@@ -131,7 +141,7 @@ if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "${AUDIO:-0}" -ge "$SFX_MIN" ] && [
    && [ "$BSPAWN" -ge 1 ] && [ "$BKILL" -ge 1 ] \
    && [ "$LASERPUP" -ge 1 ] && [ "$HOMEPUP" -ge 1 ] && [ "${MISSILE:-0}" -ge 1 ] \
    && [ "${LASERHIT:-99}" -le 12 ] \
-   && [ "$WAVE" -ge 1 ] && [ "$SPLIT" -ge 1 ] && [ "${MINE:-0}" -ge 1 ] \
+   && [ "$WAVE" -ge 1 ] && { [ "$SPLIT" -ge 1 ] || [ "$SPLIT_SPAWN" -ge 1 ]; } && [ "${MINE:-0}" -ge 1 ] \
    && [ "${SNIPER:-0}" -ge 1 ] && [ "${MOTHER:-0}" -ge 1 ] && [ -z "$NEWMISS" ] \
    && [ -z "$MISSING" ] && [ "${FAILS:-1}" = "0" ] \
    && echo "$LOADED" | grep -qE 'loaded best=[1-9]'; then

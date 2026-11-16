@@ -74,6 +74,12 @@
 
 ## 步骤 7 已落地（测试/文档收尾）
 
+- **断言去随机化（Tony 两次裁决的同一类问题）**：`sniper aim=`（实际开火）与 `split n=`（实际分裂）
+  都是"敌机活到某一刻"才发生的事件，DIFF=2 下 autopilot DPS 最高时会随机不出现。
+  现在 `SNIPER` 门锚定 `enemy spawn type=7`（入场即确定），`SPLIT` 门接受 `split n=` **或**
+  `enemy spawn type=5`；开火/分裂/被门限挡下都只作诊断打印（`sniper diagnostics` / `splitter diagnostics`），
+  新增日志 `split blocked room= cap=`。DIFF=2 连续 5 轮 PASS。
+
 - **自然擦弹**（Tony 从步骤 2 起的裁决条件）：autopilot 躲弹半径 dp(80) → `Tuning.AUTO_FLEE_DP=70`
   （擦弹环外沿 ≈ dp(65)，所以躲的时候子弹真的穿过环带），挨打后（`invuln > 0`）回退
   `AUTO_FLEE_SAFE_DP=104`。`graze` 只统计真实碰撞，钩子走 `grazeHooked`（日志 `grazeHook n=`），

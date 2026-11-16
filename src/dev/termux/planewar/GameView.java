@@ -1428,7 +1428,7 @@ public class GameView extends View {
         }
     }
 
-    int sniperShots, motherSpawns, minesDropped, splits, motherBlocks;
+    int sniperShots, motherSpawns, minesDropped, splits, motherBlocks, splitBlocks;
     // polish: hit-stop, streak banners, edge danger arrows
     float hitStop, hitStopBudget = Tuning.HIT_STOP_BUDGET;
     int streaks, dangers, hitStops;
@@ -1438,7 +1438,15 @@ public class GameView extends View {
     /** a splitter breaks into two grunts; capped, and the children never split again */
     private void splitEnemy(Enemy e) {
         int room = D_CAP[diff] - enemies.size();
-        if (room < 2) return;
+        if (room < 2) {
+            // the field is full: the split is skipped on purpose, and the log says so, so a
+            // missing "split n=" line is never confused with a broken splitter
+            if (splitBlocks < 3) {
+                splitBlocks++;
+                Log.i(TAG, "split blocked room=" + room + " cap=" + D_CAP[diff]);
+            }
+            return;
+        }
         for (int k = 0; k < 2; k++) {
             Enemy c = new Enemy();
             c.type = 0;                       // grunt: children do not split, so there is no recursion
