@@ -34,7 +34,7 @@ sleep 2
 
 LAUNCH=$(su -c "am start -n $PKG/.MainActivity --ez autostart true --ez autopilot true \
    --ez god true --ei report 4 --ei autodie 26 --ei diff $DIFF --ei super 1 --ei bomb 1 \
-   --ei superall 5" 2>&1)
+   --ei superall 5 --ei graze 12" 2>&1)
 echo "launch:  $LAUNCH"
 
 for i in $(seq 1 40); do
@@ -69,6 +69,9 @@ STARTED=$(echo "$LOG" | grep -c 'I planewar: start')
 SUPER=$(echo "$LOG" | grep -c 'super name=')
 BOMB=$(echo "$LOG" | grep -c 'bomb n=')
 STATS=$(echo "$LOG" | grep -c 'stats .*energy=[0-9]* bomb=[0-9]* graze=[0-9]* fever=[0-9]* boss=[0-9]* fps=[0-9]')
+GRAZE=$(echo "$LOG" | grep -c 'graze n=')
+GRAZED=$(echo "$LOG" | grep -oE 'graze=[0-9]+' | tail -1 | cut -d= -f2)
+FEVER=$(echo "$LOG" | grep -c 'fever=1')
 FPS=$(echo "$LOG" | grep -oE 'fps=[0-9.]+' | tail -1 | cut -d= -f2)
 FAILS=$(echo "$LOG" | grep -oE 'superFails=[0-9]+' | tail -1 | cut -d= -f2)
 # every super theme must fire and survive: a theme that throws kills the process on the field
@@ -85,6 +88,8 @@ echo "events:  $EVENT"
 echo "super:   $SUPER (energy super blast fired)"
 echo "bomb:    $BOMB (player bomb fired)"
 echo "stats:   $STATS lines with energy/bomb/graze/fever/boss/fps"
+echo "graze:   $GRAZE log lines, last ${GRAZED:-none} (graze charges energy + combo)"
+echo "fever:   $FEVER stats lines with fever=1 (combo fever must be reachable)"
 echo "fps:     ${FPS:-none} (rolling average, must be >= 45)"
 echo "themes:  missing:${MISSING:- none} superFails=${FAILS:-none} (all 5 themes must fire)"
 echo "audio:   $AUDIO (1 = all sfx loaded)"
@@ -92,10 +97,11 @@ echo "persist: ${LOADED:-none}"
 FPS_OK=$(awk -v f="${FPS:-0}" 'BEGIN { print (f >= 45) ? 1 : 0 }')
 if [ -n "$OVER" ] && [ "$EVENT" -ge 1 ] && [ "$AUDIO" -ge 1 ] && [ "$SUPER" -ge 1 ] \
    && [ "$BOMB" -ge 1 ] && [ "$STATS" -ge 1 ] && [ "$FPS_OK" = "1" ] \
+   && [ "$GRAZE" -ge 1 ] && [ "$FEVER" -ge 1 ] \
    && [ -z "$MISSING" ] && [ "${FAILS:-1}" = "0" ] \
    && echo "$LOADED" | grep -qE 'loaded best=[1-9]'; then
   echo "PASS: autopilot flew, shot, killed, triggered events, fired all 5 super themes and a bomb,"
-  echo "      kept fps >= 45; score persisted and read back"
+  echo "      grazed bullets, entered combo fever, kept fps >= 45; score persisted and read back"
   exit 0
 fi
 echo "FAIL"

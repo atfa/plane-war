@@ -12,6 +12,9 @@
   大地裂变（地裂波自下而上）/ 冰封万里（全场冰封 4 秒）。任何主题都会清空全屏敌弹。
 * **炸弹库存**（左下「炸」按钮）：开局 1 颗，上限 3，吃「爆」道具 +1（满了就加分）；
   自己选时机引爆，清弹 + 全场伤害。
+* **擦弹（graze）**：敌弹在机身外 dp(46) 的环带内掠过（未击中）→ 充能 + 连击 + 少量分数，
+  同一颗弹 0.25s 内只算一次；直击不奖励（先判直击）。
+* **连击狂热**：连击 ≥ 30 进入狂热，得分 x2 + 射速提升 + 机身红色尾焰，进入时全屏横幅。
 * 拾取掉落道具：火力 / 护盾 / 维修 / 炸弹 / 加分 / 速射。
 * 敌人：杂兵、俯冲机、炮艇、精英、重型轰炸机（小 boss）。
 * 随机事件：敌袭、狂暴、EMP、道具雨、缓速场、重型轰炸机登场。
@@ -103,9 +106,11 @@ DIFF=1 ./test.sh    # 真机自动验收（0 简单 / 1 普通 / 2 困难）
 | `--ei super N` | 本局内自动释放 N 次超必杀（日志 `super name=…`） |
 | `--ei bomb N` | 本局内自动引爆 N 颗炸弹（日志 `bomb n=…`） |
 | `--ei superall N` | 依次强制释放前 N 种超必杀主题（去随机化，保证 5 种主题都被跑到） |
+| `--ei graze N` | 本局内自动擦弹 N 次（走与碰撞同一个 `grazeHit()`，日志 `graze n=…`） |
 
 测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**5 种超必杀主题全部释放且无异常**
-（`superFails=0`）、炸弹日志、**帧率**（`stats` 行的 `fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
+（`superFails=0`）、炸弹日志、**擦弹日志 `graze n=`**、**`stats` 行里至少一次 `fever=1`**、
+**帧率**（`fps=` 必须 >= 45）、音效 → 重启并检查排行榜从磁盘读回（`loaded best=`）。
 `stats` 行形如
 `stats t=12 score=2427 kills=11 weapon=1 lives=3 enemies=1 energy=37 bomb=0 graze=0 fever=0 boss=0 fps=60.2`。
 日志：`su -c "logcat -d -s planewar:V"`。
@@ -135,7 +140,7 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 | `src/dev/termux/planewar/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
 | `src/dev/termux/planewar/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
 | `src/dev/termux/planewar/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
-| `src/dev/termux/planewar/AudioFx.java` | 运行时合成 14 种音效 + 循环芯片音乐 |
+| `src/dev/termux/planewar/AudioFx.java` | 运行时合成 15 种音效 + 循环芯片音乐 |
 | `src/dev/termux/planewar/Vibro.java` | 震动封装（API 24 / 31+） |
 | `src/dev/termux/planewar/Scores.java` | 本地排行榜（SharedPreferences） |
 | `src/dev/termux/planewar/Entities.java` | 子弹/敌人/道具/粒子数据类 |

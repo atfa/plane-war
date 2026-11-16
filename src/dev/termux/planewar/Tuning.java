@@ -67,6 +67,21 @@ public final class Tuning {
         return BOMB_DMG[clampDiff(diff)];
     }
 
+    /**
+     * Is a bullet inside the graze ring? The ring starts where the hit box ends (inclusive
+     * inner edge, exclusive outer edge), so a bullet that actually hits the ship is never
+     * also a graze. Distances are in px; the ring width in px (convert dp at the call site).
+     */
+    public static boolean grazes(float dx, float dy, float hitR, float bandPx) {
+        float d2 = dx * dx + dy * dy;
+        return d2 >= hitR * hitR && d2 < (hitR + bandPx) * (hitR + bandPx);
+    }
+
+    /** combo needed to enter fever; negative combos (never happens, but) never trigger */
+    public static boolean fever(int combo) {
+        return combo >= FEVER_COMBO;
+    }
+
     static int clampDiff(int d) {
         return d < 0 ? 0 : (d > 2 ? 2 : d);
     }

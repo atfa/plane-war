@@ -149,6 +149,9 @@ public class GameView extends View {
     final float[] boltX = new float[Super.MAX_IMPACTS];   // 万雷齐鸣 columns (visual)
     final float[] boltT = new float[Super.MAX_IMPACTS];
     int graze, bossAlive;         // reported in the periodic stats line
+    boolean feverWas;             // rising edge detector for the fever banner
+    int grazeHook;                // test hook: fire N grazes during a run
+    float grazeHookNext;
     int superHook, bombHook;      // test hooks: fire the skill N times during a run
     int superAll;                 // test hook: fire one super per theme, so all five get covered
     float superAllNext;           //   next fire time
@@ -307,6 +310,7 @@ public class GameView extends View {
         quakeOn = false;
         quakeY = 0f;
         graze = 0;
+        feverWas = false;
         bossAlive = 0;
         autoSkillT = 0f;
         for (int i = 0; i < boltT.length; i++) boltT[i] = 0f;
@@ -378,6 +382,12 @@ public class GameView extends View {
     /** test hooks: fire the super blast / the bomb N times during the run (same code path) */
     void hookSuper(int n) { superHook = n; }
     void hookBomb(int n) { bombHook = n; }
+
+    /** test hook: N grazes during the run, through the collision code's own entry point */
+    void hookGraze(int n) {
+        grazeHook = n;
+        grazeHookNext = 6f;
+    }
 
     /** test hook: fire every super theme once, spaced out, so the test can assert all five names */
     void hookSuperAll(int n) {
@@ -599,6 +609,12 @@ public class GameView extends View {
         if (bombHook > 0 && time > 8f) {
             bombHook--;
             useBomb();
+        }
+        // test hook: grazes go through the same grazeHit() the collision code uses
+        if (grazeHook > 0 && time >= grazeHookNext) {
+            grazeHookNext += 0.35f;
+            grazeHook--;
+            grazeHit(sx + dp(34), sy - dp(10), Color.rgb(255, 120, 120));
         }
         // test hook: walk every theme in turn - a theme that throws kills the run, and the
         // test asserts all five names show up, so no theme can hide behind the random pick
@@ -1027,6 +1043,7 @@ public class GameView extends View {
             b.x += b.vx * dt * slow;
             b.y += b.vy * dt * slow;
             b.life -= dt;
+            if (b.grazeT > 0f) b.grazeT -= dt;
             if (b.life <= 0 || b.y < -dp(40) || b.y > H + dp(40) || b.x < -dp(40) || b.x > W + dp(40))
                 ebullets.remove(i);
         }
@@ -1175,6 +1192,7 @@ public class GameView extends View {
         if (invuln > 0 || state != RUNNING) return;
 
         // enemy bullets -> player
+        float grazeBand = dp(Tuning.GRAZE_RADIUS_DP);
         for (int i = ebullets.size() - 1; i >= 0; i--) {
             Bullet b = ebullets.get(i);
             float dx = b.x - sx, dy = b.y - sy;
@@ -1183,6 +1201,12 @@ public class GameView extends View {
                 for (int k = 0; k < 6; k++) spark(b.x, b.y, b.color, dp(160));
                 damagePlayer();
                 return;
+            }
+            // not a hit - if it just brushed past, charge up. Checked after the hit test on
+            // purpose: taking a hit must never also pay out a graze bonus.
+            if (b.grazeT <= 0f && Tuning.grazes(dx, dy, b.r + sr, grazeBand)) {
+                b.grazeT = Tuning.GRAZE_COOLDOWN;
+                grazeHit(b.x, b.y, b.color);
             }
         }
 
@@ -1207,6 +1231,7 @@ public class GameView extends View {
         combo++;
         if (combo > maxCombo) maxCombo = combo;
         comboT = 2.4f;
+        checkFever();
         energy = Math.min(Tuning.ENERGY_MAX, energy + Tuning.killEnergy(e.type));
         float mult = comboMult();
         int pts = (int) (e.score * mult * D_SCORE[diff]);
@@ -1290,6 +1315,37 @@ public class GameView extends View {
     }
 
     // ------------------------------------------------------------------ active skills
+
+    /**
+     * A bullet brushed past the ship: the risk/reward loop. Charges energy, feeds the combo
+     * (and through it fever), pays a little score. Collisions and the test hook both come
+     * through here, so the hook cannot fake a graze the player could not get.
+     */
+    void grazeHit(float x, float y, int color) {
+        graze++;
+        combo++;
+        if (combo > maxCombo) maxCombo = combo;
+        comboT = 2.4f;
+        energy = Math.min(Tuning.ENERGY_MAX, energy + Tuning.GRAZE_ENERGY);
+        scoreF += 12f * comboMult();
+        spark(x, y, color, dp(90));
+        floatText(sx, sy - dp(34), "擦弹", Color.rgb(120, 240, 255), dp(13));
+        audio.play(AudioFx.GRAZE, 0.55f);
+        if (graze == 1 || graze == 10 || graze % 25 == 0)
+            Log.i(TAG, "graze n=" + graze + " combo=" + combo + " energy=" + (int) energy);
+        checkFever();
+    }
+
+    /** fever is entered on a rising edge only, so the banner does not spam every kill */
+    void checkFever() {
+        boolean now = feverActive();
+        if (now && !feverWas) {
+            banner("连击狂热", "得分 x2 · 射速提升");
+            audio.play(AudioFx.EVENT, 0.8f);
+            floatText(sx, sy - dp(58), "狂热!", GOLD, dp(20));
+        }
+        feverWas = now;
+    }
 
     /** true when the combo is deep enough to be in fever (score x2, faster guns) */
     boolean feverActive() {
@@ -1533,7 +1589,7 @@ public class GameView extends View {
                 score, kills, (int) time, diff);
         Log.i(TAG, "gameover score=" + score + " kills=" + kills + " time=" + (int) time
                 + " rank=" + rank + " events=" + eventsSeen + " diff=" + DIFF_NAME[diff]
-                + " superFails=" + superFails);
+                + " superFails=" + superFails + " graze=" + graze);
         if (rank >= 0) {
             ui.postDelayed(new Runnable() {
                 @Override public void run() { promptName(rank); }

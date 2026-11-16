@@ -23,6 +23,7 @@ public class TestLogic {
     public static void main(String[] args) {
         tuning();
         superThemes();
+        grazeAndFever();
         System.out.println(failed == 0
                 ? "OK: " + checks + " checks passed"
                 : "FAILED: " + failed + "/" + checks + " checks failed");
@@ -125,5 +126,48 @@ public class TestLogic {
         }
         ok(inRange, "pick() stays inside the theme table");
         ok(Super.pick(null) == 0, "pick(null) falls back to the first theme");
+    }
+
+    /** graze band geometry and the fever threshold */
+    static void grazeAndFever() {
+        float hit = 30f;          // bullet radius + ship radius, px
+        float band = 80f;        // graze band width, px
+        ok(!Tuning.grazes(0f, 0f, hit, band), "dead centre is a hit, not a graze");
+        ok(Tuning.grazes(hit, 0f, hit, band),
+                "exactly on the hit box edge grazes - the hit test is strict (<), so it is not a hit");
+        ok(Tuning.grazes(hit + 1f, 0f, hit, band), "just outside the hit box grazes");
+        ok(Tuning.grazes(0f, hit + band - 0.5f, hit, band), "just inside the outer edge grazes");
+        ok(!Tuning.grazes(hit + band, 0f, hit, band), "on the outer edge is out of the band");
+        ok(!Tuning.grazes(hit + band + 1f, 0f, hit, band), "outside the band is no graze");
+        // the band is a ring: for a fixed distance, grazing must not depend on the direction
+        float d = hit + band * 0.5f;
+        for (int a = 0; a < 360; a += 15) {
+            double rad = Math.toRadians(a);
+            ok(Tuning.grazes((float) (d * Math.cos(rad)), (float) (d * Math.sin(rad)), hit, band),
+                    "graze band is round (" + a + " deg)");
+        }
+        // a wider band must never shrink the set of grazing positions
+        for (float x = 0f; x < hit + band + 40f; x += 4f) {
+            boolean narrow = Tuning.grazes(x, 0f, hit, band);
+            boolean wide = Tuning.grazes(x, 0f, hit, band * 2f);
+            ok(!narrow || wide, "a wider band grazes at least as much (x=" + x + ")");
+        }
+        ok(Tuning.GRAZE_RADIUS_DP > 0 && Tuning.GRAZE_RADIUS_DP <= 80f, "graze band width is sane");
+        ok(Tuning.GRAZE_ENERGY > 0f, "a graze charges energy");
+        ok(Tuning.GRAZE_COOLDOWN > 0f,
+                "one bullet cannot be farmed every frame (" + Tuning.GRAZE_COOLDOWN + "s)");
+        // with the cooldown a slow bullet hugging the ship cannot fill the bar in one pass:
+        // ENERGY_MAX / GRAZE_ENERGY grazes are needed, and the cooldown caps the rate
+        float grazesNeeded = Tuning.ENERGY_MAX / Tuning.GRAZE_ENERGY;
+        ok(grazesNeeded * Tuning.GRAZE_COOLDOWN > 5f,
+                "filling the energy bar by grazing alone takes > 5s of hugging a bullet");
+
+        ok(!Tuning.fever(Tuning.FEVER_COMBO - 1), "one below the combo threshold is not fever");
+        ok(Tuning.fever(Tuning.FEVER_COMBO), "the threshold itself is fever");
+        ok(Tuning.fever(Tuning.FEVER_COMBO + 50), "deep combos stay in fever");
+        ok(!Tuning.fever(0), "no combo is not fever");
+        ok(Tuning.FEVER_SCORE_MULT > 1f, "fever pays more");
+        ok(Tuning.FEVER_FIRE_RATE > 0f && Tuning.FEVER_FIRE_RATE < 1f,
+                "fever fires faster (gap multiplier " + Tuning.FEVER_FIRE_RATE + ")");
     }
 }

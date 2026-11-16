@@ -9,7 +9,7 @@
 | # | 步骤 | 状态 |
 |---|---|---|
 | 1 | 能量超必杀 + 炸弹库存 | ✅ 已提交 `531ba82`，已提交验证（REVIEW） |
-| 2 | 擦弹 graze + 连击狂热 | 待做 |
+| 2 | 擦弹 graze + 连击狂热 | ✅ 已提交，已提交验证 |
 | 3 | 多阶段 BOSS 战（`[goal]`） | 待做 |
 | 4 | 武器多样化（追踪导弹 / 激光） | 待做 |
 | 5 | 4 种新敌机 + 编队调度器 | 待做 |
@@ -57,10 +57,24 @@
 3. 步骤 8 的拆文件必须是**行为等价**重构，不许顺手改数值。
 4. `Scores.java` 条目格式不动（存档只加键），`loaded best=` 断言必须继续通过。
 
-## 下一步（步骤 2 起手式）
+## 步骤 2 已落地内容
 
-擦弹（graze）：在 `collisions()` 里对每颗敌弹判断与飞机的距离落在 `Tuning.GRAZE_RADIUS_DP` 环带内，
-用 `Bullet.grazeT` 做冷却（字段已加），命中 → `energy += Tuning.GRAZE_ENERGY`、`graze++`、浮动「擦弹」；
-连击 ≥ `Tuning.FEVER_COMBO` 进入狂热（`feverActive()` 已实现，已接进 `comboMult()` x2 与 `fire()` 射速、
-机身尾焰与 HUD pill）。新增 `AudioFx.GRAZE` 音效（记得把 `VER` 提到 v5 以重建缓存 wav）、
-钩子日志 `graze n=`、`test.sh` 断言。
+- **擦弹**：`Tuning.grazes(dx,dy,hitR,bandPx)` 纯几何（环形：内边包含、外边不包含，与直击判定
+  `d2 < rr*rr` 严格互补）；`collisions()` 在敌弹直击判定**之后**才查擦弹带（直击绝不发奖励），
+  用 `Bullet.grazeT` + `Tuning.GRAZE_COOLDOWN=0.25` 防同一颗弹刷能量；`grazeHit()` 是
+  碰撞与钩子共用的唯一入口（充能 + 连击 + 分数 + 浮动“擦弹” + `AudioFx.GRAZE`）。
+- **狂热**：`feverActive()` 步骤 1 已接好（x2 得分 / 0.7 射速 / 尾焰 / HUD pill），步骤 2 只补了
+  上升沿横幅 `checkFever()`（`killEnemy()` 与 `grazeHit()` 都调），graze 嗂连击使 fever 可达。
+- 新钩子 `--ei graze N`（t=6s 起每 0.35s 一次）；日志 `graze n=`（第 1、10 次与之后每 25 次）；
+  `gameover` 行末尾追加 ` graze=`。
+- `AudioFx` 新增 `GRAZE`，`VER` 提 v5（缓存 wav 会重建），音效 14→15 种。
+- JVM 断言 70 → **148 项**（新增 `grazeAndFever()`：环形几何/方向无关/带越宽越宽/冷却防刷能/fever 阈值）。
+- 实测：`DIFF=1 ./test.sh` PASS（score=21229 super=6 bomb=1 graze 12 fever=1 出现 2 行 fps=60.2
+  `loaded best=21229`，audio 15 sfx）。
+
+## 步骤 3 起手式（多阶段 BOSS，`[goal]` 双签）
+
+- 必须加 `--ei boss N` 钩子：`autodie 26` 永远到不了 t=80s。
+- BOSS 血条高度 <= dp(14)，放在 `topPad` 下方，登场用现有 `banner()`，不堆 HUD。
+- 同屏敌机上限：简单 22 / 普通 28 / 困难 34（BOSS 召唤杂兵要走这个 cap）。
+- 建议拆 `Boss.java`（纯 Java 3 阶段状态机，输出开火/召唤请求），配套 JVM 断言。
