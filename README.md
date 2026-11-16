@@ -130,7 +130,7 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 
 | 文件 | 说明 |
 |------|------|
-| `src/dev/termux/planewar/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
+| `PROGRESS.md` | 本次 Duo 会话的进度与环境事实速查（交接用） || `src/dev/termux/planewar/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
 | `src/dev/termux/planewar/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
 | `src/dev/termux/planewar/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
 | `src/dev/termux/planewar/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
