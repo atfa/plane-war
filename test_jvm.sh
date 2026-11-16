@@ -10,7 +10,9 @@ mkdir -p "$OUT"
 
 SRC="src/dev/termux/planewar/Tuning.java
 src/dev/termux/planewar/Super.java
-test/TestLogic.java"
+src/dev/termux/planewar/Boss.java
+test/TestLogic.java
+test/TestBoss.java"
 
 out=$(javac -nowarn -d "$OUT" $SRC 2>&1)
 rc=$?
@@ -20,7 +22,11 @@ if [ $rc -ne 0 ] || [ ! -f "$OUT/dev/termux/planewar/TestLogic.class" ]; then
   exit 1
 fi
 
-if java -cp "$OUT" dev.termux.planewar.TestLogic; then
+rc=0
+for t in TestLogic TestBoss; do
+  if java -cp "$OUT" dev.termux.planewar.$t; then :; else rc=1; fi
+done
+if [ $rc -eq 0 ]; then
   echo "PASS: JVM logic tests"
   exit 0
 fi
