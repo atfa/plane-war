@@ -14,14 +14,16 @@ src/dev/termux/planewar/Boss.java
 src/dev/termux/planewar/Weapon.java
 src/dev/termux/planewar/Wave.java
 src/dev/termux/planewar/UiSpec.java
+src/dev/termux/planewar/ShipSpec.java
 test/TestLogic.java
 test/TestBoss.java
-test/TestUi.java"
+test/TestUi.java
+test/TestShips.java"
 
 # the pure classes must stay free of Android: that is what makes this suite runnable without a phone
 ANDROID=$(grep -l "import android" src/dev/termux/planewar/Tuning.java src/dev/termux/planewar/Super.java \
   src/dev/termux/planewar/Boss.java src/dev/termux/planewar/Weapon.java src/dev/termux/planewar/Wave.java \
-  src/dev/termux/planewar/UiSpec.java 2>/dev/null)
+  src/dev/termux/planewar/UiSpec.java src/dev/termux/planewar/ShipSpec.java 2>/dev/null)
 if [ -n "$ANDROID" ]; then
   echo "FAIL: pure-logic class imports Android, the JVM suite cannot cover it: $ANDROID"
   exit 1
@@ -35,8 +37,25 @@ if [ $rc -ne 0 ] || [ ! -f "$OUT/dev/termux/planewar/TestLogic.class" ]; then
   exit 1
 fi
 
+# Ships.java is the Android side of the art contract: it cannot be compiled here, but it can be
+# grepped, so assert it names every silhouette ShipSpec declares. A silhouette Ships never draws is
+# an aircraft that renders as the fallback shape, which is exactly the "everything looks the same"
+# regression this suite exists to catch.
+SHIPS=src/dev/termux/planewar/Ships.java
+if [ -f "$SHIPS" ]; then
+  missing=""
+  for s in INTERCEPTOR DIAMOND ARROW HEXPOD PENTAGON BROADSIDE LOBES BARGE NEEDLE SAUCER \
+           FORTRESS STORM WRAITH; do
+    grep -q "SIL_$s" "$SHIPS" || missing="$missing SIL_$s"
+  done
+  if [ -n "$missing" ]; then
+    echo "FAIL: Ships.java never draws:$missing - every ShipSpec silhouette needs a case"
+    exit 1
+  fi
+fi
+
 rc=0
-for t in TestLogic TestBoss TestUi; do
+for t in TestLogic TestBoss TestUi TestShips; do
   if java -cp "$OUT" dev.termux.planewar.$t; then :; else rc=1; fi
 done
 if [ $rc -eq 0 ]; then
