@@ -195,3 +195,49 @@
 - BOSS 血条高度 <= dp(14)，放在 `topPad` 下方，登场用现有 `banner()`，不堆 HUD。
 - 同屏敌机上限：简单 22 / 普通 28 / 困难 34（BOSS 召唤杂兵要走这个 cap）。
 - 建议拆 `Boss.java`（纯 Java 3 阶段状态机，输出开火/召唤请求），配套 JVM 断言。
+
+---
+
+# Duo 会话 20261118-121948-b2222296 · 界面图标化（GOAL 模式）
+
+任务：把剩下的「一个边框 + 一个中文汉字」临时图标换成真正的矢量图标；玩法数值不动。
+分工：Austin 实现（`Icons.java` + `GameView` 渲染），Tony 拥有纯逻辑层（`UiSpec.java` + `test/TestUi.java`）。
+
+## 已落地（Austin `4ebc3b6`，Tony `c5b0b1c`）
+
+- `Icons.java`：17 个 Canvas 矢量图标（盾/十字/炸弹/星/闪电/激光/导弹/火焰/星芒/音符/喇叭/震动/
+  左右尖角/飞机/开关）。`Icons.draw(c, paint, path, rect, icon, cx, cy, r, color)` 复用调用方的
+  Paint/Path/RectF，**每帧零分配**，画完恢复画笔的 alpha/color/style/strokeWidth/cap；
+  画布按 r 缩放，所以线宽写在单位空间里，任意尺寸都保持视觉粗细。无位图、无新 res、不依赖中文字体。
+- `UiSpec.java`（Tony，纯 Java）：道具颜色/短标签/图标唯一真值表 + `ICON_MIN_DP=9` /
+  `PILL_ICON_DP=11` / `POWER_ICON_RATIO=0.62` / `SKILL_ICON_RATIO=0.52` / `LEGEND_ICON_DP=10` /
+  `minReadableDp(fit)`。`GameView.powerColor`/`powerLabel` 变成 delegate，29 个调用点零改动，
+  8 个 RGB 值逐字节不变（`check.py` 采样道具盒琥珀色 255,190,80）。
+- 依赖方向单向 `Icons → UiSpec`；`UiSpec` 注释里不能出现 `import android` 这个短语，
+  因为 `test_jvm.sh` 的守卫是纯文本 `grep -l "import android"`。
+- 落点：掉落道具盒（图标在旋转框内，短标签移到盒子下方）、超必杀/炸弹按钮（星芒/炸弹 + 环内小字）、
+  HUD 状态药丸（图标 + 短标签 + 计时）、设置开关（图标 + 开关图形，替掉 开/关）、
+  灵敏度两侧尖角（替掉 慢/快）、标题页道具图例（8 个图标一行）。
+- 新测试钩子 `--ei powerall N`：t=6s 在屏幕中部悬停生成 N 种道具各一个，一张截图看全整套图标
+  （日志 `pup hook row n=`）。`plane/shot.sh`（带钩子重启+截图+ASCII）与 `plane/pngcrop.py`
+  （把截图一块区域裁成 png 看细节）是为这一步加的验证工具。
+
+## 验收口径与实测
+
+- `./test_jvm.sh` → `OK: 7921` + `OK: boss 54654` + `OK: ui 82` + `PASS`。
+- `DIFF=0/1/2 ./test.sh` 三档全 PASS（DIFF=1 score=100462，fps 60.2，音效 19，BOSS killed=1）。
+  其中一轮跑在 779x1427 的窄窗口（`uiScale=1.24`），HUD 药丸加图标后没有溢出。
+- 真机截图逐项目标（1440x2097，density 1.75，uiScale 1.50）：道具行 8 个图标全部可辨；
+  激光图标从「向下箭头」改成「光束 + 两道线圈」（旧版被读成下载箭头）；导弹从贝塞尔叶片改成
+  头锥 + 机身 + 双尾翼 + 尾焰（旧版在 30px 下糊成一片）；开关的 on/off 用滑块位置表达。
+
+## 环境事实（照抄，省得重测）
+
+- 本机 `/tmp` 不可写，用 `$TMPDIR`（`/data/data/com.termux/files/usr/tmp`）。
+- `view.py`/`crop.py`/`check.py` 里硬编码的 `~/fix/.agents/skills/...` 在本 worktree 不存在，
+  需要 `export PYTHONPATH="$PWD/../.agents/skills/android-on-device-apk/scripts"`。
+- 屏幕 1440x2304，游戏窗口 1440x2097（`layout ... top=131 bot=63`），下方是 launcher dock；
+  截图后按 y 区域裁图时记得游戏画面在 0~2090。
+- `dp()` 实际像素 = v * 1.75 * 1.50 = 2.625 px/dp，算道具盒/图标位置时按这个换算。
+- 道具盒 `movePowers()` 有强制下落：`p.vy += (dp(60) - p.vy) * dt * 1.5f`，所以钩子生成的道具
+  每秒掉 ~157px，截图时机要按这个算；机头 dp(150) 内有磁吸，中间几颗会被吸走。

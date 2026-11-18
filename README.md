@@ -7,10 +7,10 @@
 * **机头始终朝上**，屏幕任意位置**拖动**即可让飞机上下左右移动（不用点到飞机）。
 * 松手后飞机滑行一小段距离停下；飞机碰到屏幕边缘会停下并贴边。
 * 飞机自动开火，无需按键；战场底部两角是两枚**主动技能**按钮。
-* **能量超必杀**（右下「超」按钮）：击杀敌机与时间都会充能，满 100 释放全屏超必杀，
+* **能量超必杀**（右下星芒按钮，充能环填满即就绪）：击杀敌机与时间都会充能，满 100 释放全屏超必杀，
   5 种随机主题：烈焰流星（三连流星爆）/ 万雷齐鸣（六道雷柱）/ 圣光普照（全场清 +1 命）/
   大地裂变（地裂波自下而上）/ 冰封万里（全场冰封 4 秒）。任何主题都会清空全屏敌弹。
-* **炸弹库存**（左下「炸」按钮）：开局 1 颗，上限 3，吃「爆」道具 +1（满了就加分）；
+* **炸弹库存**（左下炸弹按钮，下方 `xN` 是库存）：开局 1 颗，上限 3，吃炸弹道具 +1（满了就加分）；
   自己选时机引爆，清弹 + 全场伤害。
 * **擦弹（graze）**：敌弹在机身外 dp(46) 的环带内掠过（未击中）→ 充能 + 连击 + 少量分数，
   同一颗弹 0.25s 内只算一次；直击不奖励（先判直击）。autopilot 会贴着环带躲（dp(70)，
@@ -89,6 +89,21 @@ BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难
 选择会保存在 `SharedPreferences`（`planewar_opts`），重启后仍然有效。
 飞机位移 = 手指位移 × 系数，速度上限 = `760dp/s × (0.5 + 0.95 × 系数)`（默认档约 1390dp/s）。
 
+## 图标层（不再用汉字当图标）
+
+早期所有元素都是「一个边框 + 一个中文汉字」的临时方案（盾/命/爆/分/速/激光/追/火、超/蓄、炸、开/关、慢/快）。
+现在换成一套 Canvas 矢量图标：
+
+* `Icons.java`：17 个图标（盾、十字、炸弹、星、闪电、激光、导弹、火焰、星芒、音符、喇叭、震动、
+  左/右尖角、飞机、开关），全部用**调用方传入的** `Paint`/`Path`/`RectF` 画，每帧零分配，
+  画完恢复画笔状态；不依赖位图资源，也不依赖中文字体。
+* `UiSpec.java`（**纯 Java**）：道具的**颜色 / 短标签 / 图标**唯一真值表，`color(kind)`、`label(kind)`、
+  `iconOf(kind)`，外加最小可读尺寸 `ICON_MIN_DP`、药丸图标 `PILL_ICON_DP`、图标相对边框比例
+  `POWER_ICON_RATIO` / `SKILL_ICON_RATIO`。`GameView` 的 `powerColor`/`powerLabel` 只是它的别名。
+* 依赖方向单向：`Icons` → `UiSpec`（`UiSpec` 不许 import Android，否则 JVM 单测守卫会 FAIL）。
+* 落点：掉落道具盒（图标在旋转框内，短标签移到盒子下方）、两枚主动技能按钮、HUD 状态药丸、
+  设置开关（配一个开关图形表示开/关）、灵敏度两侧的尖角、标题页的道具图例。
+
 ## 构建
 
 ```sh
@@ -133,6 +148,7 @@ BOSS 阶段阈值/不可逆/召唤上限/活性、编队坐标在 320/700/1400 �
 | `--ei graze N` | 本局内自动擦弹 N 次（走与碰撞同一个 `grazeHit()`，但与真实擦弹分开计数：日志 `grazeHook n=…`，真实擦弹才写 `graze n=`） |
 | `--ei boss N` | 本局内强制出场 N 只 BOSS（t=6s 起，不等 t=80s；日志 `boss spawn name= hp=` / `boss killed`） |
 | `--es powerup laser` / `--es powerup tracking` | t=6s 起在机头上方掎落一排道具（走真实 `collect()`，无测试旁路）；日志 `pup hook drop kind=` / `pup kind=laser t=8.0` / `pup kind=homing t=12.0` |
+| `--ei powerall N` | t=6s 起在屏幕中部悬停生成 N 种道具各一个（一排），一张截图就能看全整套图标；日志 `pup hook row n=` |
 | `--ei wave N` | t=1s 起 N 个编队波次 + 4 种新敌机各一只；日志 `wave kind= n= type=` / `enemy spawn type=` / `split n=` / `mine n=` / `sniper aim` / `mother spawn n=` / `clear mines=` |
 
 测试会：卸载重装 → 自动飞行 26 秒 → 检查 `gameover score=`、事件、**5 种超必杀主题全部释放且无异常**
@@ -161,12 +177,18 @@ BOSS 阶段阈值/不可逆/召唤上限/活性、编队坐标在 320/700/1400 �
 ## 截图检查
 
 ```sh
+./shot.sh --ez autostart true --ez god true --ei powerall 8   # 用钩子重启游戏并截图
+./shot.sh                                                   # 只截当前画面
+python pngcrop.py 0 950 1440 1300 "$TMPDIR/crop.png" 1       # 裁一块像素区域存成 png
 su -c "screencap -p /data/local/tmp/screen.png && chmod 644 /data/local/tmp/screen.png"
 cp /data/local/tmp/screen.png "$TMPDIR/screen.png"
 python view.py "$TMPDIR/screen.png" 78 70 84   # cols, y0%, y1%
 python check.py "$TMPDIR/screen.png"           # 按颜色统计飞机/敌人/道具
 python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y0 x1 y1 cols）
 ```
+
+`shot.sh` 会先唤醒屏幕、回桌面（Android 14+ 从 shell 起 Activity 需要桌面在最前），再带钩子启动，
+等 `WAIT` 秒（默认 9）后截图，最后跑 `view.py`；`PIX=1` 追加 `check.py`。
 
 注意：`input tap` 用的是屏幕坐标，游戏视图从 y=100 开始（导航栏），
 所以点视图里的 (x, y) 要 `input tap x (y+100)`。日志 `size 1080.0x2300.0` 可确认。
@@ -187,5 +209,9 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 | `src/dev/termux/planewar/Scores.java` | 本地排行榜（SharedPreferences） |
 | `src/dev/termux/planewar/Entities.java` | 子弹/敌人/道具/粒子数据类 |
 | `test/TestLogic.java` + `test_jvm.sh` | 纯逻辑类的 JVM 断言（无需手机） |
+| `src/dev/termux/planewar/Icons.java` | 17 个 Canvas 矢量图标，零分配绘制（复用调用方 Paint/Path/RectF） |
+| `src/dev/termux/planewar/UiSpec.java` | 道具颜色/短标签/图标唯一真值表 + 图标尺寸常量，**纯 Java** |
+| `test/TestUi.java` | `UiSpec` 的 JVM 断言（真值表完整性、颜色逐字节不变、图标映射全覆盖） |
+| `shot.sh` / `pngcrop.py` | 带钩子启动并截图 / 把截图的一块区域裁成 png 看细节 |
 | `gen_icon.py` | 生成各密度启动图标 |
 | `view.py` / `check.py` / `crop.py` | 截图 ASCII 预览 / 颜色校验 / 区域放大 |
