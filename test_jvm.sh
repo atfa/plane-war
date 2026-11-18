@@ -13,12 +13,15 @@ src/dev/termux/planewar/Super.java
 src/dev/termux/planewar/Boss.java
 src/dev/termux/planewar/Weapon.java
 src/dev/termux/planewar/Wave.java
+src/dev/termux/planewar/UiSpec.java
 test/TestLogic.java
-test/TestBoss.java"
+test/TestBoss.java
+test/TestUi.java"
 
 # the pure classes must stay free of Android: that is what makes this suite runnable without a phone
 ANDROID=$(grep -l "import android" src/dev/termux/planewar/Tuning.java src/dev/termux/planewar/Super.java \
-  src/dev/termux/planewar/Boss.java src/dev/termux/planewar/Weapon.java src/dev/termux/planewar/Wave.java 2>/dev/null)
+  src/dev/termux/planewar/Boss.java src/dev/termux/planewar/Weapon.java src/dev/termux/planewar/Wave.java \
+  src/dev/termux/planewar/UiSpec.java 2>/dev/null)
 if [ -n "$ANDROID" ]; then
   echo "FAIL: pure-logic class imports Android, the JVM suite cannot cover it: $ANDROID"
   exit 1
@@ -33,7 +36,7 @@ if [ $rc -ne 0 ] || [ ! -f "$OUT/dev/termux/planewar/TestLogic.class" ]; then
 fi
 
 rc=0
-for t in TestLogic TestBoss; do
+for t in TestLogic TestBoss TestUi; do
   if java -cp "$OUT" dev.termux.planewar.$t; then :; else rc=1; fi
 done
 if [ $rc -eq 0 ]; then

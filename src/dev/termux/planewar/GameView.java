@@ -38,9 +38,10 @@ public class GameView extends View {
 
     static final int TITLE = 0, RUNNING = 1, PAUSED = 2, OVER = 3;
 
-    // power-up kinds
-    static final int PW_WEAPON = 0, PW_SHIELD = 1, PW_HEAL = 2, PW_BOMB = 3, PW_SCORE = 4, PW_RAPID = 5,
-            PW_LASER = 6, PW_HOMING = 7;
+    // power-up kinds: the values live in UiSpec so the JVM suite can pin them
+    static final int PW_WEAPON = UiSpec.PW_WEAPON, PW_SHIELD = UiSpec.PW_SHIELD,
+            PW_HEAL = UiSpec.PW_HEAL, PW_BOMB = UiSpec.PW_BOMB, PW_SCORE = UiSpec.PW_SCORE,
+            PW_RAPID = UiSpec.PW_RAPID, PW_LASER = UiSpec.PW_LASER, PW_HOMING = UiSpec.PW_HOMING;
 
     // ---- palette ----
     static final int BG_TOP = Color.rgb(9, 12, 26);
@@ -2546,31 +2547,9 @@ public class GameView extends View {
         }
     }
 
-    static int powerColor(int k) {
-        switch (k) {
-            case PW_SHIELD: return Color.rgb(96, 214, 255);
-            case PW_HEAL: return Color.rgb(110, 240, 150);
-            case PW_BOMB: return Color.rgb(255, 112, 112);
-            case PW_SCORE: return Color.rgb(255, 220, 120);
-            case PW_RAPID: return Color.rgb(230, 140, 255);
-            case PW_LASER: return Color.rgb(120, 255, 235);
-            case PW_HOMING: return Color.rgb(255, 150, 60);
-            default: return Color.rgb(255, 190, 80);
-        }
-    }
+    static int powerColor(int k) { return UiSpec.color(k); }
 
-    static String powerLabel(int k) {
-        switch (k) {
-            case PW_SHIELD: return "盾";
-            case PW_HEAL: return "命";
-            case PW_BOMB: return "爆";
-            case PW_SCORE: return "分";
-            case PW_RAPID: return "速";
-            case PW_LASER: return "激光";
-            case PW_HOMING: return "追";
-            default: return "火";
-        }
-    }
+    static String powerLabel(int k) { return UiSpec.label(k); }
 
     private void drawPowers(Canvas c) {
         for (int i = 0; i < powers.size(); i++) {
