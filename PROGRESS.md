@@ -241,3 +241,20 @@
 - `dp()` 实际像素 = v * 1.75 * 1.50 = 2.625 px/dp，算道具盒/图标位置时按这个换算。
 - 道具盒 `movePowers()` 有强制下落：`p.vy += (dp(60) - p.vy) * dt * 1.5f`，所以钩子生成的道具
   每秒掉 ~157px，截图时机要按这个算；机头 dp(150) 内有磁吸，中间几颗会被吸走。
+
+## 战机美术层（13 架飞机重画）
+
+- 分工：Tony 拥有 `ShipSpec.java`（纯 Java 真值表）+ `test/TestShips.java` + `test_jvm.sh`；
+  Austin 拥有 `Ships.java`（Canvas 美术层）+ `GameView`/`MainActivity` 接入 + 真机验证 + 文档。
+- `Ships.draw(Canvas, Paint, Path, RectF, id, cx, cy, r, t, tint, flame, rot, aux)` 是唯一入口；
+  `id` 用 `ShipSpec.PLAYER` / `ShipSpec.ofEnemy(type)` / `ShipSpec.ofBoss(kind)`，`aux` 传 BOSS 阶段。
+  所有路径在单位空间 `[-1,1]`（机头朝上），渐变也在单位空间算，所以一份 `static final Shader`
+  在任意半径下都对；每帧零分配，画完恢复画笔状态；对称机用 `c.scale(-1,1)` 画一半。
+- 识别色逐字节保持旧 `GameView.E_*` 常量（`check.py` 9 个采样点仍命中），每架飞机中心画一颗
+  纯识别色不透明核心灯（下限 `CORE_MIN_DP=2.5dp`），小尺寸下靠它认机。
+- 调参踩过的坑：`HULL` 用两段渐变会把小敌机整体洗白，改成 `tint(id,0.38) → id → hullBottom`
+  三段；`GLASS` 用 `RadialGradient` 在 15dp 下糊成一团白，改成三段 `LinearGradient`（亮机头 →
+  中段 → 座舱色）+ 描边 + 一道高光；`METAL_HI`（接近白）做大件填充（炮塔盘、水雷球）在
+  r=46dp 下读成墓碑，大件一律用 `METAL`，`METAL_HI` 只留给小装饰。
+- 新增测试钩子：`am start ... --ei show N` 让前 N 种敌机排两行悬停（`vx=vy=0`、`fire=999f`、
+  `hp=maxhp=1e9f`、`showNoFire` 关掉玩家射击），日志 `show n=`，专供截图比对。

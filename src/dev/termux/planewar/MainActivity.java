@@ -56,6 +56,8 @@ public class MainActivity extends Activity {
             if (wv > 0) view.hookWave(wv);
             int bs = b.getInt("boss", 0);
             if (bs > 0) view.hookBoss(bs);
+            int show = b.getInt("show", 0);
+            if (show > 0) view.hookShow(show);
             int die = b.getInt("autodie", 0);
             if (die > 0) view.setAutoDie(die);
             if (b.containsKey("vibrate")) view.setVibe(b.getBoolean("vibrate", true));

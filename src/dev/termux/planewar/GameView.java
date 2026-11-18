@@ -48,14 +48,9 @@ public class GameView extends View {
     static final int BG_BOT = Color.rgb(3, 5, 12);
     static final int NEB_A = Color.rgb(58, 26, 96);
     static final int NEB_B = Color.rgb(12, 62, 96);
-    static final int SHIP = Color.rgb(120, 224, 255);
-    static final int SHIP_DK = Color.rgb(28, 96, 168);
+    /** The player's identity colour - ShipSpec is the truth table for it now. */
+    static final int SHIP = ShipSpec.identity(ShipSpec.PLAYER);
     static final int BULLET = Color.rgb(255, 236, 150);
-    static final int E_GRUNT = Color.rgb(255, 108, 108);
-    static final int E_DARTER = Color.rgb(255, 172, 64);
-    static final int E_GUNSHIP = Color.rgb(188, 124, 255);
-    static final int E_ELITE = Color.rgb(96, 236, 176);
-    static final int E_HEAVY = Color.rgb(255, 88, 190);
     static final int TXT = Color.rgb(232, 240, 255);
     static final int TXT_DIM = Color.rgb(136, 156, 186);
     static final int GOLD = Color.rgb(255, 206, 96);
@@ -480,6 +475,41 @@ public class GameView extends View {
 
     void hookSpawn(int type) { spawnEnemy(type, W / 2f); }
 
+    /**
+     * --ei show N: park one of each of the first N enemy types in a row across the field, so a
+     * single screenshot shows the whole enemy art set (the same trick hookPowerAll plays for the
+     * icon layer). The row is invulnerable and does not shoot: it is there to be looked at.
+     */
+    void hookShow(int n) {
+        hookShow = Math.max(1, Math.min(ShipSpec.ENEMY_TYPES, n));
+        if (hookShowIn <= 0) hookShowIn = 6f;
+    }
+
+    int hookShow;
+    float hookShowIn;
+    boolean showNoFire;
+
+    private void spawnHookShow() {
+        int n = hookShow;
+        hookShow = 0;
+        showNoFire = true;
+        // two rows, small types first: the heavy and the mothership are 3x the span of a grunt and
+        // would overlap their neighbours in a single evenly spaced line
+        for (int i = 0; i < n; i++) {
+            int row = i < 5 ? 0 : 1;
+            int col = row == 0 ? i : i - 5;
+            int per = row == 0 ? Math.min(n, 5) : n - 5;
+            spawnEnemy(i, W * (col + 1) / (per + 1f));
+            Enemy e = enemies.get(enemies.size() - 1);
+            e.y = H * (row == 0 ? 0.24f : 0.46f);
+            e.vx = 0;
+            e.vy = 0;              // hover: the row has to survive the screenshot
+            e.fire = 999f;         // and stay quiet while it is photographed
+            e.hp = e.maxhp = 1e9f;  // the player's fire (and the autopilot's) cannot clear it
+        }
+        Log.i(TAG, "show n=" + n);
+    }
+
     /** --ei wave N: N formations, spaced out, so a 26s test run can see them all.
      *  Deferred: the intent hooks run before the run starts, and resetRun() clears the spawn queue. */
     int waveHook;
@@ -788,6 +818,7 @@ public class GameView extends View {
         steer(dt);
         fire(dt);
         if (waveHook > 0) applyWaveHook();
+        if (hookShow > 0 && time >= hookShowIn) spawnHookShow();
         if (!hookQueue.isEmpty()) {
             hookPowerIn -= dt;
             if (hookPowerIn <= 0) {
@@ -924,6 +955,7 @@ public class GameView extends View {
     int laserHits, missilesFired;       // totals for the log lines
 
     private void fire(float dt) {
+        if (showNoFire) return;   // --ei show: the row is there to be photographed, not shot at
         laserT -= dt;
         homingT -= dt;
         beamCd -= dt;
@@ -1092,7 +1124,6 @@ public class GameView extends View {
                 e.vx = (rnd.nextFloat() * 2 - 1) * dp(60);
                 e.vy = dp(150) * spScale;
                 e.score = 180;
-                e.color = E_DARTER;
                 break;
             case 2: // gunship - hovers and shoots aimed bursts
                 e.r = dp(23);
@@ -1100,7 +1131,6 @@ public class GameView extends View {
                 e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(60);
                 e.vy = dp(90);
                 e.score = 460;
-                e.color = E_GUNSHIP;
                 e.fire = ef(1.1f);
                 break;
             case 3: // elite - sine path, 3-way spread
@@ -1109,7 +1139,6 @@ public class GameView extends View {
                 e.vx = 0;
                 e.vy = dp(70) * spScale;
                 e.score = 720;
-                e.color = E_ELITE;
                 e.fire = ef(1.4f);
                 break;
             case 5: // splitter - breaks into two grunts when it dies
@@ -1118,7 +1147,6 @@ public class GameView extends View {
                 e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(90);
                 e.vy = dp(115) * spScale;
                 e.score = 380;
-                e.color = Color.rgb(150, 255, 130);
                 break;
             case 6: // miner - hovers high and drops hanging mines
                 e.r = dp(24);
@@ -1126,7 +1154,6 @@ public class GameView extends View {
                 e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(70);
                 e.vy = dp(150);
                 e.score = 620;
-                e.color = Color.rgb(255, 200, 90);
                 e.fire = 0.05f;          // acts on arrival: the autopilot deletes new types in under a second
                 break;
             case 7: // sniper - telegraphs a red line, then fires one fast shot
@@ -1135,7 +1162,6 @@ public class GameView extends View {
                 e.vx = 0;
                 e.vy = dp(190);
                 e.score = 540;
-                e.color = Color.rgb(255, 60, 60);
                 e.fire = 0.05f;          // telegraph on arrival, so a fast kill cannot hide it
                 break;
             case 8: // mothership - parks at the top and keeps producing grunts
@@ -1144,7 +1170,6 @@ public class GameView extends View {
                 e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(45);
                 e.vy = dp(90);
                 e.score = 2600;
-                e.color = Color.rgb(120, 200, 255);
                 e.fire = 0.05f;          // first minion on arrival
                 break;
             case 4: // heavy - mini boss
@@ -1153,7 +1178,6 @@ public class GameView extends View {
                 e.vx = (rnd.nextBoolean() ? 1 : -1) * dp(40);
                 e.vy = dp(60);
                 e.score = 4200;
-                e.color = E_HEAVY;
                 e.fire = ef(1.6f);
                 break;
             default: // grunt - straight down with a drift
@@ -1162,9 +1186,9 @@ public class GameView extends View {
                 e.vx = (rnd.nextFloat() * 2 - 1) * dp(70);
                 e.vy = dp(135) * spScale;
                 e.score = 100;
-                e.color = E_GRUNT;
                 break;
         }
+        e.color = ShipSpec.identity(type);   // the art truth table owns enemy colours
         enemies.add(e);
         Log.i(TAG, "enemy spawn type=" + type);
     }
@@ -2335,52 +2359,17 @@ public class GameView extends View {
         if (state == RUNNING || state == PAUSED) {
             float s = dp(16);
             float blink = invuln > 0 ? (0.45f + 0.55f * (float) Math.abs(Math.sin(time * 22f))) : 1f;
-            glow(c, sx, sy, s * 3.1f,
-                    frenzyT > 0 || feverActive() ? Color.rgb(255, 150, 70) : SHIP, 0.5f * blink);
+            glow(c, sx, sy, s * 2.6f,
+                    frenzyT > 0 || feverActive() ? Color.rgb(255, 150, 70) : SHIP, 0.38f * blink);
             c.save();
             c.translate(sx, sy);
             c.rotate((float) Math.toDegrees(bank));
             paint.setAlpha((int) (255 * blink));
 
-            // engine flame
-            float fl = s * (1.1f + 0.5f * (float) Math.sin(time * 40f)) * (rapidT > 0 ? 1.5f : 1f);
-            path.reset();
-            path.moveTo(-s * 0.34f, s * 0.72f);
-            path.lineTo(0, s * 0.72f + fl);
-            path.lineTo(s * 0.34f, s * 0.72f);
-            path.close();
-            paint.setShader(new LinearGradient(0, s * 0.7f, 0, s * 0.7f + fl,
-                    Color.rgb(255, 240, 190), Color.rgb(60, 140, 255) & 0x00FFFFFF,
-                    Shader.TileMode.CLAMP));
-            c.drawPath(path, paint);
-            paint.setShader(null);
-
-            // hull
-            path.reset();
-            path.moveTo(0, -s * 1.25f);
-            path.lineTo(s * 0.30f, -s * 0.25f);
-            path.lineTo(s * 0.95f, s * 0.45f);
-            path.lineTo(s * 0.34f, s * 0.35f);
-            path.lineTo(s * 0.40f, s * 0.85f);
-            path.lineTo(-s * 0.40f, s * 0.85f);
-            path.lineTo(-s * 0.34f, s * 0.35f);
-            path.lineTo(-s * 0.95f, s * 0.45f);
-            path.lineTo(-s * 0.30f, -s * 0.25f);
-            path.close();
-            paint.setShader(new LinearGradient(-s, -s, s, s, SHIP, SHIP_DK, Shader.TileMode.CLAMP));
-            c.drawPath(path, paint);
-            paint.setShader(null);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(dp(1.4f));
-            paint.setColor(Color.rgb(220, 250, 255));
-            c.drawPath(path, paint);
-            paint.setStyle(Paint.Style.FILL);
-            // cockpit
-            paint.setColor(Color.rgb(20, 40, 70));
-            c.drawCircle(0, -s * 0.15f, s * 0.22f, paint);
-            paint.setColor(Color.rgb(160, 240, 255));
+            // 分层矢量战机（Ships）：尾焰长度就是 fever / frenzy 的视觉反馈
+            Ships.draw(c, paint, path, rect, ShipSpec.PLAYER, 0, 0, s, time, 0,
+                    frenzyT > 0 ? 1.7f : feverActive() ? 1.45f : 1f, 0, 0);
             paint.setAlpha(255);
-            c.drawCircle(0, -s * 0.22f, s * 0.10f, paint);
             c.restore();
 
             // shield bubbles
@@ -2425,118 +2414,28 @@ public class GameView extends View {
     private void drawEnemies(Canvas c) {
         for (int i = 0; i < enemies.size(); i++) {
             Enemy e = enemies.get(i);
-            int col = e.flash > 0 ? Color.WHITE : e.color;
-            if (freezeT > 0 && e.flash <= 0) col = Color.rgb(150, 220, 250);   // 冰封万里
+            // 受击白闪与冰封万里都是整机色调，Ships 逐层应用
+            int tint = e.flash > 0 ? Color.WHITE
+                    : (freezeT > 0 ? Color.rgb(150, 220, 250) : 0);
             glow(c, e.x, e.y, e.r * 2.2f, e.color, 0.35f);
-            c.save();
-            c.translate(e.x, e.y);
-            paint.setColor(col);
-            paint.setStyle(Paint.Style.FILL);
-            switch (e.type) {
-                case 1: // darter: arrow
-                    c.rotate((float) Math.toDegrees(Math.atan2(e.vx, e.vy)));
-                    path.reset();
-                    path.moveTo(0, e.r * 1.3f);
-                    path.lineTo(e.r * 0.9f, -e.r * 0.5f);
-                    path.lineTo(0, -e.r * 0.1f);
-                    path.lineTo(-e.r * 0.9f, -e.r * 0.5f);
-                    path.close();
-                    c.drawPath(path, paint);
-                    break;
-                case 2: // gunship: hexagon + pods
-                    path.reset();
-                    for (int k = 0; k < 6; k++) {
-                        float a = (float) (k * Math.PI / 3 + Math.PI / 6);
-                        float px = (float) Math.cos(a) * e.r, py = (float) Math.sin(a) * e.r * 0.85f;
-                        if (k == 0) path.moveTo(px, py);
-                        else path.lineTo(px, py);
-                    }
-                    path.close();
-                    c.drawPath(path, paint);
-                    paint.setColor(e.flash > 0 ? Color.WHITE : Color.rgb(60, 30, 90));
-                    c.drawRect(-e.r * 1.25f, -e.r * 0.2f, -e.r * 0.75f, e.r * 0.6f, paint);
-                    c.drawRect(e.r * 0.75f, -e.r * 0.2f, e.r * 1.25f, e.r * 0.6f, paint);
-                    break;
-                case 3: // elite: pentagon + spinning ring
-                    path.reset();
-                    for (int k = 0; k < 5; k++) {
-                        float a = (float) (k * 2 * Math.PI / 5 - Math.PI / 2);
-                        float px = (float) Math.cos(a) * e.r, py = (float) Math.sin(a) * e.r;
-                        if (k == 0) path.moveTo(px, py);
-                        else path.lineTo(px, py);
-                    }
-                    path.close();
-                    c.drawPath(path, paint);
-                    paint.setStyle(Paint.Style.STROKE);
-                    paint.setStrokeWidth(dp(2));
-                    paint.setColor(Color.WHITE);
-                    paint.setAlpha(150);
-                    c.save();
-                    c.rotate(e.t * 90f);
-                    c.drawCircle(0, 0, e.r * 1.35f, paint);
-                    c.restore();
-                    paint.setAlpha(255);
-                    paint.setStyle(Paint.Style.FILL);
-                    break;
-                case 5: // splitter: two lobes, splits on death
-                    c.drawCircle(-e.r * 0.45f, 0, e.r * 0.62f, paint);
-                    c.drawCircle(e.r * 0.45f, 0, e.r * 0.62f, paint);
-                    paint.setColor(Color.rgb(30, 70, 30));
-                    c.drawCircle(0, 0, e.r * 0.3f, paint);
-                    break;
-                case 6: // miner: boxy hull with a mine bay underneath
-                    rect.set(-e.r, -e.r * 0.5f, e.r, e.r * 0.5f);
-                    c.drawRoundRect(rect, dp(8), dp(8), paint);
-                    paint.setColor(Color.rgb(90, 60, 10));
-                    c.drawCircle(0, e.r * 0.7f, e.r * 0.34f, paint);
-                    break;
-                case 7: // sniper: slim hull, red telegraph line locked on the player
-                    if (e.aimT > 0f) {
-                        paint.setStyle(Paint.Style.STROKE);
-                        paint.setStrokeWidth(dp(1.6f));
-                        paint.setColor(Color.rgb(255, 60, 60));
-                        paint.setAlpha((int) (120 + 100 * Math.sin(e.t * 22f)));
-                        c.drawLine(0, 0, e.aimX - e.x, e.aimY - e.y, paint);
-                        paint.setAlpha(255);
-                        paint.setStyle(Paint.Style.FILL);
-                    }
-                    path.reset();
-                    path.moveTo(0, -e.r * 1.6f);
-                    path.lineTo(e.r * 0.7f, e.r);
-                    path.lineTo(-e.r * 0.7f, e.r);
-                    path.close();
-                    c.drawPath(path, paint);
-                    break;
-                case 8: // mothership: wide hull with three bays
-                    rect.set(-e.r, -e.r * 0.42f, e.r, e.r * 0.42f);
-                    c.drawRoundRect(rect, dp(14), dp(14), paint);
-                    paint.setColor(Color.rgb(20, 50, 90));
-                    for (int k = -1; k <= 1; k++) c.drawCircle(k * e.r * 0.55f, 0, e.r * 0.2f, paint);
-                    break;
-                case 4: // heavy: hull + pods + cannons
-                    rect.set(-e.r, -e.r * 0.62f, e.r, e.r * 0.62f);
-                    c.drawRoundRect(rect, dp(10), dp(10), paint);
-                    paint.setColor(e.flash > 0 ? Color.WHITE : Color.rgb(120, 20, 80));
-                    c.drawRoundRect(new RectF(-e.r * 1.2f, -e.r * 0.2f, -e.r * 0.7f, e.r * 0.9f),
-                            dp(6), dp(6), paint);
-                    c.drawRoundRect(new RectF(e.r * 0.7f, -e.r * 0.2f, e.r * 1.2f, e.r * 0.9f),
-                            dp(6), dp(6), paint);
-                    paint.setColor(Color.rgb(255, 230, 240));
-                    c.drawCircle(0, e.r * 0.1f, e.r * 0.22f, paint);
-                    break;
-                default: // grunt: diamond
-                    path.reset();
-                    path.moveTo(0, e.r);
-                    path.lineTo(e.r * 0.85f, 0);
-                    path.lineTo(0, -e.r);
-                    path.lineTo(-e.r * 0.85f, 0);
-                    path.close();
-                    c.drawPath(path, paint);
-                    paint.setColor(Color.rgb(40, 10, 10));
-                    c.drawCircle(0, 0, e.r * 0.28f, paint);
-                    break;
+
+            if (e.type == 7 && e.aimT > 0f) {   // 狙击锁定线，世界坐标
+                c.save();
+                c.translate(e.x, e.y);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(dp(1.6f));
+                paint.setColor(Color.rgb(255, 60, 60));
+                paint.setAlpha((int) (120 + 100 * Math.sin(e.t * 22f)));
+                c.drawLine(0, 0, e.aimX - e.x, e.aimY - e.y, paint);
+                paint.setAlpha(255);
+                paint.setStyle(Paint.Style.FILL);
+                c.restore();
             }
-            c.restore();
+
+            // darters bank into their dive; everything else flies nose-down
+            float rot = e.type == 1 ? (float) Math.toDegrees(Math.atan2(e.vx, e.vy)) : 0f;
+            Ships.draw(c, paint, path, rect, ShipSpec.ofEnemy(e.type), e.x, e.y, e.r,
+                    time + e.t, tint, 1f, rot, 0);
 
             if (e.maxhp > 6) {
                 float w = e.r * 2f, h = dp(3.4f);
@@ -2848,31 +2747,9 @@ public class GameView extends View {
         int col = bossHitFx > 0f ? Color.WHITE : bossColor();
         float pulse = 0.5f + 0.5f * (float) Math.sin(bossEnter * 3f);
         glow(c, bossX, bossY, r * 1.7f, col, 0.30f + 0.12f * pulse);
-        path.reset();
-        int sides = 6 + boss.kind() * 2;
-        for (int i = 0; i < sides; i++) {
-            double a = Math.PI * 2 * i / sides + Math.PI / 2;
-            float rr = r * (i % 2 == 0 ? 1f : 0.72f);
-            float x = bossX + (float) Math.cos(a) * rr;
-            float y = bossY + (float) Math.sin(a) * rr;
-            if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
-        }
-        path.close();
-        paint.setColor(Color.argb(225, Color.red(col), Color.green(col), Color.blue(col)));
-        c.drawPath(path, paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(dp(3));
-        paint.setColor(Color.WHITE);
-        c.drawPath(path, paint);
-        paint.setStyle(Paint.Style.FILL);
-        // core lights, one per phase, the active one lit
-        for (int i = 0; i < Boss.PHASES; i++) {
-            int cc = i <= boss.phase() ? Color.rgb(255, 240, 180) : Color.rgb(60, 70, 90);
-            c.drawCircle(bossX + (i - 1) * dp(16), bossY, dp(5), paint);
-            paint.setColor(cc);
-            c.drawCircle(bossX + (i - 1) * dp(16), bossY, dp(4), paint);
-            paint.setColor(col);
-        }
+        // 分层矢量 BOSS（Ships）：三盏阶段核心灯由 Ships 按 boss.phase() 点亮
+        Ships.draw(c, paint, path, rect, ShipSpec.ofBoss(boss.kind()), bossX, bossY, r, time,
+                bossHitFx > 0f ? Color.WHITE : 0, 1f, 0, boss.phase());
     }
 
     /** the big health bar, drawn under topPad so it never covers the HUD pills */
@@ -2883,17 +2760,21 @@ public class GameView extends View {
         float y = topPad + dp(34);
         float h = dp(12);
         paint.setColor(Color.argb(150, 10, 14, 26));
-        c.drawRoundRect(new RectF(m, y, m + w, y + h), dp(6), dp(6), paint);
+        rect.set(m, y, m + w, y + h);
+        c.drawRoundRect(rect, dp(6), dp(6), paint);
         float frac = Math.max(0f, Math.min(1f, boss.hpFrac()));
         int col = boss.phase() == 0 ? Color.rgb(255, 90, 90)
                 : boss.phase() == 1 ? Color.rgb(255, 170, 60) : Color.rgb(255, 60, 200);
         paint.setColor(col);
-        if (frac > 0f)
-            c.drawRoundRect(new RectF(m, y, m + w * frac, y + h), dp(6), dp(6), paint);
+        if (frac > 0f) {
+            rect.set(m, y, m + w * frac, y + h);
+            c.drawRoundRect(rect, dp(6), dp(6), paint);
+        }
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(dp(1));
         paint.setColor(Color.argb(180, 255, 255, 255));
-        c.drawRoundRect(new RectF(m, y, m + w, y + h), dp(6), dp(6), paint);
+        rect.set(m, y, m + w, y + h);
+        c.drawRoundRect(rect, dp(6), dp(6), paint);
         paint.setStyle(Paint.Style.FILL);
         // phase ticks
         for (int i = 1; i < Boss.PHASES; i++) {

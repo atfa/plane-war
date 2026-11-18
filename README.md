@@ -104,6 +104,29 @@ BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难
 * 落点：掉落道具盒（图标在旋转框内，短标签移到盒子下方）、两枚主动技能按钮、HUD 状态药丸、
   设置开关（配一个开关图形表示开/关）、灵敏度两侧的尖角、标题页的道具图例。
 
+## 战机美术层（13 架飞机全部重画）
+
+以前 13 架飞机都是「一个多边形 + 一个实心圆点」，15dp 的小敌机和 60dp 的 BOSS 长得一样。
+现在换成一套 Canvas 矢量美术层，全部代码画，**不新增任何位图/字体/权限资源**：
+
+* `Ships.java`：13 套剪例（玩家拦截机、9 种敌机、3 种 BOSS），入口只有一个
+  `Ships.draw(c, p, path, rect, id, cx, cy, r, t, tint, flame, rot, aux)`。约定：
+  复用调用方的 `Paint`/`Path`/`RectF`，**每帧零分配**（所有 `Path`/`Shader`/颜色数组都是
+  `static final`），画完恢复画笔状态；所有路径在**单位空间** `[-1,1]`（机头朝上），
+  渐变也在单位空间里算，所以一份静态 `Shader` 在任意尺寸下都对；敌机由调用方转 180°。
+* `ShipSpec.java`（**纯 Java**）：美术唯一真值表 — 每架飞机的识别色/上壳色/下壳色/点缀色/
+  座舱色/修边色/光晕色、剪例编号 `SIL_*`、机头半径 `noseR`、核心灯半径 `coreRadiusDp`、
+  每架飞机的图层配额 `layers`（grunt/darter/sniper 4，splitter/gunship/elite/miner 6，
+  heavy/mother 7，玩家 8，BOSS 9），以及颜色算子 `mix`/`shade`/`tint`/`alpha`。
+  `Ships` 不许自己发明颜色，只从 `ShipSpec` 取。
+* **识别色不变**：`ShipSpec.identity(id)` 逐字节等于旧版 `GameView` 里的 `E_*` 常量，
+  `check.py` 的 9 个采样点仍然命中；每架飞机都在正中心用纯识别色画一颗不透明核心灯
+  （半径下限 `CORE_MIN_DP = 2.5dp`），保证小尺寸下也能一眼认出是什么机。
+* 保留原有表现：受击白闪 `e.flash`、玩家无敌闪烁、倾斜 `bank`、护盾泡泡、狂热/连击火焰颜色、
+  狙击锁红线、BOSS 三阶段核心灯（读 `Boss.PHASES`）、血条、HUD 全部不变。
+* 测试钩子：`am start ... --ei show N` 把前 N 种敌机排成两行悬停（不射击、不掉血、不爆炸），
+  日志 `show n=`，专供截图逐架比对美术。
+
 ## 构建
 
 ```sh
@@ -210,6 +233,9 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 | `src/dev/termux/planewar/Entities.java` | 子弹/敌人/道具/粒子数据类 |
 | `test/TestLogic.java` + `test_jvm.sh` | 纯逻辑类的 JVM 断言（无需手机） |
 | `src/dev/termux/planewar/Icons.java` | 17 个 Canvas 矢量图标，零分配绘制（复用调用方 Paint/Path/RectF） |
+| `src/dev/termux/planewar/Ships.java` | 13 架飞机的 Canvas 矢量美术层（单位空间路径 + 静态渐变，每帧零分配） |
+| `src/dev/termux/planewar/ShipSpec.java` | 飞机美术唯一真值表（识别色/剪例/图层配额/核心灯半径），**纯 Java** |
+| `test/TestShips.java` | `ShipSpec` 的 JVM 断言（识别色逐字节不变、图层配额、帧操作上限、核心灯下限） |
 | `src/dev/termux/planewar/UiSpec.java` | 道具颜色/短标签/图标唯一真值表 + 图标尺寸常量，**纯 Java** |
 | `test/TestUi.java` | `UiSpec` 的 JVM 断言（真值表完整性、颜色逐字节不变、图标映射全覆盖） |
 | `shot.sh` / `pngcrop.py` | 带钩子启动并截图 / 把截图的一块区域裁成 png 看细节 |
