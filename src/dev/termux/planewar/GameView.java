@@ -327,6 +327,9 @@ public class GameView extends View {
         nextBossAt = 80f;
         bossEnter = 0f;
         bossHitFx = 0f;
+        // --ei show silences the player for the photo; a restart must give the guns back.
+        // hookShow / hookShowIn stay: MainActivity sets them before startGame() calls resetRun.
+        showNoFire = false;
         autoSkillT = 0f;
         for (int i = 0; i < boltT.length; i++) boltT[i] = 0f;
         if (W > 0) {
@@ -2461,10 +2464,11 @@ public class GameView extends View {
             c.translate(b.x, b.y);
             c.rotate((float) Math.toDegrees(a));
             paint.setColor(b.color);
-            c.drawRoundRect(new RectF(-len, -b.r, len, b.r), b.r, b.r, paint);
+            rect.set(-len, -b.r, len, b.r);
+            c.drawRoundRect(rect, b.r, b.r, paint);
             paint.setColor(Color.WHITE);
-            c.drawRoundRect(new RectF(-len * 0.4f, -b.r * 0.45f, len * 0.6f, b.r * 0.45f),
-                    b.r * 0.4f, b.r * 0.4f, paint);
+            rect.set(-len * 0.4f, -b.r * 0.45f, len * 0.6f, b.r * 0.45f);
+            c.drawRoundRect(rect, b.r * 0.4f, b.r * 0.4f, paint);
             c.restore();
         }
         for (int i = 0; i < ebullets.size(); i++) {
