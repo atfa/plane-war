@@ -38,6 +38,8 @@ public class MainActivity extends Activity {
             if (pu != null) view.hookPower(powerKind(pu));
             String pu2 = b.getString("powerup2");
             if (pu2 != null) view.hookPower(powerKind(pu2));
+            int pa = b.getInt("powerall", 0);
+            if (pa > 0) view.hookPowerAll(pa);
             int spawn = b.getInt("spawn", -1);
             if (spawn >= 0) view.hookSpawn(spawn);
             int ev = b.getInt("event", -1);

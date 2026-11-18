@@ -431,7 +431,37 @@ public class GameView extends View {
     float hookPowerIn;
     final ArrayList<Integer> hookQueue = new ArrayList<Integer>();
 
+    /**
+     * --ei powerall N: queue one drop box of every power-up kind, laid out in a row, so a single
+     * screenshot shows the whole icon set (the icon layer is what a screenshot has to prove).
+     */
+    void hookPowerAll(int n) {
+        hookPowerAll = Math.max(1, Math.min(UiSpec.PW_COUNT, n));
+        hookQueue.add(UiSpec.PW_WEAPON);   // update() only drains the queue when it is non-empty
+        if (hookPowerIn <= 0) hookPowerIn = 6f;
+    }
+
+    int hookPowerAll;
+
     private void spawnHookPower() {
+        if (hookPowerAll > 0) {
+            int n = hookPowerAll;
+            hookPowerAll = 0;
+            hookQueue.clear();
+            for (int i = 0; i < n; i++) {
+                PowerUp p = new PowerUp();
+                p.kind = i;
+                p.r = dp(16);
+                p.x = W * (i + 1) / (n + 1);
+                p.y = H * 0.28f + (i % 2) * dp(44);
+                p.vx = 0;
+                p.vy = 0;          // hover: the row has to survive long enough to be screenshotted
+                p.t = i * 0.37f;
+                powers.add(p);
+            }
+            Log.i(TAG, "pup hook row n=" + n);
+            return;
+        }
         hookPowerKind = hookQueue.size() > 0 ? hookQueue.remove(0) : -1;
         for (int i = 0; i < 9; i++) {
             PowerUp p = new PowerUp();
@@ -2582,6 +2612,7 @@ public class GameView extends View {
             c.save();
             c.translate(p.x, p.y);
             c.rotate((float) Math.sin(p.t * 2.2f) * 12f);
+            // capsule plate + coloured rim; the vector icon replaces the old one-glyph placeholder
             paint.setColor(Color.rgb(10, 16, 26));
             rect.set(-r, -r, r, r);
             c.drawRoundRect(rect, dp(6), dp(6), paint);
@@ -2590,8 +2621,11 @@ public class GameView extends View {
             paint.setColor(col);
             c.drawRoundRect(rect, dp(6), dp(6), paint);
             paint.setStyle(Paint.Style.FILL);
+            Icons.draw(c, paint, path, rect, UiSpec.iconOf(p.kind), 0, 0,
+                    r * UiSpec.POWER_ICON_RATIO, col);
             c.restore();
-            text(c, powerLabel(p.kind), p.x, p.y + r * 0.62f, r * 1.25f, col, 1);
+            // the label moves under the box: inside it now belongs to the icon
+            text(c, powerLabel(p.kind), p.x, p.y + r + dp(11), dp(11), col, 1);
         }
     }
 
@@ -2917,16 +2951,16 @@ public class GameView extends View {
 
         // active effect pills
         float py = topPad + dp(48);
-        py = pill(c, py, frenzyT > 0, "狂暴", frenzyT, powerColor(PW_RAPID));
-        py = pill(c, py, rapidT > 0, "速射", rapidT, powerColor(PW_RAPID));
-        py = pill(c, py, laserT > 0, "激光", laserT, powerColor(PW_LASER));
-        py = pill(c, py, homingT > 0, "追踪", homingT, powerColor(PW_HOMING));
-        py = pill(c, py, slowT > 0, "缓速场", slowT, powerColor(PW_SHIELD));
-        py = pill(c, py, shield > 0, "护盾 " + shield, -1, powerColor(PW_SHIELD));
-        py = pill(c, py, weapon >= MAX_WEAPON, "火力全开", -1, powerColor(PW_WEAPON));
-        py = pill(c, py, feverActive(), "连击狂热 x2", -1, GOLD);
-        py = pill(c, py, freezeT > 0, "冰封", freezeT, powerColor(PW_SHIELD));
-        py = pill(c, py, bombStock >= Tuning.BOMB_MAX, "炸弹满仓", -1, powerColor(PW_BOMB));
+        py = pill(c, py, frenzyT > 0, UiSpec.ICON_RAPID, "狂暴", frenzyT, powerColor(PW_RAPID));
+        py = pill(c, py, rapidT > 0, UiSpec.ICON_RAPID, "速射", rapidT, powerColor(PW_RAPID));
+        py = pill(c, py, laserT > 0, UiSpec.ICON_LASER, "激光", laserT, powerColor(PW_LASER));
+        py = pill(c, py, homingT > 0, UiSpec.ICON_HOMING, "追踪", homingT, powerColor(PW_HOMING));
+        py = pill(c, py, slowT > 0, UiSpec.ICON_SLOW, "缓速场", slowT, powerColor(PW_SHIELD));
+        py = pill(c, py, shield > 0, UiSpec.ICON_SHIELD, "护盾 x" + shield, -1, powerColor(PW_SHIELD));
+        py = pill(c, py, weapon >= MAX_WEAPON, UiSpec.ICON_WEAPON, "火力全开", -1, powerColor(PW_WEAPON));
+        py = pill(c, py, feverActive(), UiSpec.ICON_SCORE, "连击狂热 x2", -1, GOLD);
+        py = pill(c, py, freezeT > 0, UiSpec.ICON_SLOW, "冰封", freezeT, powerColor(PW_SHIELD));
+        py = pill(c, py, bombStock >= Tuning.BOMB_MAX, UiSpec.ICON_BOMB, "炸弹满仓", -1, powerColor(PW_BOMB));
 
         if (combo >= 2) {
             float k = Math.min(1f, comboT / 0.4f);
@@ -2978,8 +3012,8 @@ public class GameView extends View {
                 false, paint);
         paint.setStyle(Paint.Style.FILL);
         if (ready) glow(c, cx, cy, r * 2.4f, Color.rgb(255, 210, 120), 0.3f + 0.25f * pulse);
-        text(c, ready ? "超" : "蓄", cx, cy - dp(2), r * 0.95f,
-                ready ? Color.rgb(255, 240, 190) : TXT_DIM, 1);
+        Icons.draw(c, paint, path, rect, UiSpec.ICON_SUPER, cx, cy - dp(2),
+                r * UiSpec.SKILL_ICON_RATIO, ready ? Color.rgb(255, 240, 190) : TXT_DIM);
         text(c, ready ? "就绪" : (int) (energy / Tuning.ENERGY_MAX * 100) + "%",
                 cx, cy + r * 0.72f, dp(10), ready ? GOLD : TXT_DIM, 1);
 
@@ -2994,15 +3028,21 @@ public class GameView extends View {
         paint.setColor(bombStock > 0 ? powerColor(PW_BOMB) : Color.rgb(70, 80, 100));
         c.drawCircle(bx, cy, r, paint);
         paint.setStyle(Paint.Style.FILL);
-        text(c, "炸", bx, cy - dp(2), r * 0.95f,
-                bombStock > 0 ? Color.rgb(255, 190, 170) : TXT_DIM, 1);
+        Icons.draw(c, paint, path, rect, UiSpec.ICON_BOMB_BTN, bx, cy - dp(2),
+                r * UiSpec.SKILL_ICON_RATIO, bombStock > 0 ? Color.rgb(255, 190, 170) : TXT_DIM);
         text(c, "x" + bombStock, bx, cy + r * 0.72f, dp(10),
                 bombStock > 0 ? powerColor(PW_BOMB) : TXT_DIM, 1);
     }
 
-    private float pill(Canvas c, float y, boolean on, String label, float t, int col) {
+    /**
+     * One active-effect pill: icon + label + optional countdown. The icon carries the meaning, so
+     * the label stays short; the pill grows to fit, so nothing is clipped on a narrow DeX window.
+     */
+    private float pill(Canvas c, float y, boolean on, int icon, String label, float t, int col) {
         if (!on) return y;
-        float h = dp(20), w = dp(30) + textW(label, dp(12)) + (t > 0 ? dp(26) : 0);
+        float h = dp(20), is = UiSpec.PILL_ICON_DP;
+        float pad = dp(6), gap = dp(4);
+        float w = pad * 2 + is + gap + textW(label, dp(12)) + (t > 0 ? dp(26) : 0);
         rect.set(m(), y, m() + w, y + h);
         paint.setColor(Color.rgb(12, 20, 32));
         paint.setAlpha(190);
@@ -3013,7 +3053,9 @@ public class GameView extends View {
         paint.setColor(col);
         c.drawRoundRect(rect, h / 2, h / 2, paint);
         paint.setStyle(Paint.Style.FILL);
-        text(c, label, m() + dp(9), y + h - dp(6), dp(12), col, 0);
+        float ix = m() + pad + is / 2;
+        Icons.draw(c, paint, path, rect, icon, ix, y + h / 2, is / 2, col);
+        text(c, label, ix + is / 2 + gap, y + h - dp(6), dp(12), col, 0);
         if (t > 0) text(c, String.format(java.util.Locale.US, "%.1f", t), m() + w - dp(9),
                 y + h - dp(6), dp(12), TXT, 2);
         return y + h + dp(5);
@@ -3142,8 +3184,12 @@ public class GameView extends View {
         float total = w * SENS.length + gap * (SENS.length - 1);
         float x = cx - total / 2;
         text(c, "拖动灵敏度", cx - dp(56) * fit, y - dp(10) * fit, dp(13) * fit, TXT_DIM, 2);
-        text(c, "慢", cx - total / 2 - dp(10) * fit, y + h - dp(9) * fit, dp(11) * fit, TXT_DIM, 2);
-        text(c, "快", cx + total / 2 + dp(10) * fit, y + h - dp(9) * fit, dp(11) * fit, TXT_DIM, 0);
+        float sc = UiSpec.ICON_MIN_DP * fit;
+        int scol = Color.rgb(140, 152, 175);
+        Icons.draw(c, paint, path, rect, UiSpec.ICON_SLOW,
+                cx - total / 2 - dp(18) * fit, y + h - sc, sc, scol);
+        Icons.draw(c, paint, path, rect, UiSpec.ICON_FAST,
+                cx + total / 2 + dp(18) * fit, y + h - sc, sc, scol);
         for (int i = 0; i < SENS.length; i++) {
             RectF r = btnSens[i];
             r.set(x + i * (w + gap), y, x + i * (w + gap) + w, y + h);
@@ -3169,9 +3215,9 @@ public class GameView extends View {
         btnMusic.set(x, y, x + w, y + h);
         btnSound.set(x + w + gap, y, x + w * 2 + gap, y + h);
         btnVibe.set(x + (w + gap) * 2, y, x + w * 3 + gap * 2, y + h);
-        toggle(c, btnMusic, "音乐", musicOn);
-        toggle(c, btnSound, "音效", soundOn);
-        toggle(c, btnVibe, "震动", vibrateOn);
+        toggle(c, btnMusic, UiSpec.ICON_MUSIC, "音乐", musicOn);
+        toggle(c, btnSound, UiSpec.ICON_SFX, "音效", soundOn);
+        toggle(c, btnVibe, UiSpec.ICON_VIBRO, "震动", vibrateOn);
         return y + h;
     }
 
@@ -3186,7 +3232,8 @@ public class GameView extends View {
         return top;
     }
 
-    private void toggle(Canvas c, RectF r, String label, boolean on) {
+    /** One on/off button: icon, label and a switch glyph, so the state reads without CJK. */
+    private void toggle(Canvas c, RectF r, int icon, String label, boolean on) {
         paint.setColor(on ? Color.rgb(20, 46, 40) : Color.rgb(24, 26, 34));
         c.drawRoundRect(r, dp(8), dp(8), paint);
         paint.setStyle(Paint.Style.STROKE);
@@ -3194,8 +3241,24 @@ public class GameView extends View {
         paint.setColor(on ? Color.rgb(110, 231, 158) : Color.rgb(90, 100, 120));
         c.drawRoundRect(r, dp(8), dp(8), paint);
         paint.setStyle(Paint.Style.FILL);
-        text(c, label + " " + (on ? "开" : "关"), r.centerX(), r.centerY() + dp(5), dp(13),
-                on ? Color.rgb(160, 245, 195) : TXT_DIM, 1);
+        int col = on ? Color.rgb(160, 245, 195) : TXT_DIM;
+        float is = dp(7);
+        Icons.draw(c, paint, path, rect, icon, r.left + dp(9) + is, r.centerY(), is, col);
+        Icons.switch_(c, paint, rect, r.right - dp(13), r.centerY(), dp(17), dp(9), on, col);
+        text(c, label, r.centerX() - dp(4), r.centerY() + dp(5), dp(13), col, 1);
+    }
+
+    /**
+     * The whole power-up alphabet in one row on the title screen: the icons are the legend, so
+     * the player learns them before the first drop ever appears.
+     */
+    private void drawLegend(Canvas c, float cx, float y) {
+        float is = UiSpec.LEGEND_ICON_DP * fit;
+        float step = is * 2.3f;
+        int n = UiSpec.PW_COUNT;
+        float x0 = cx - step * (n - 1) / 2;
+        for (int k = 0; k < n; k++)
+            Icons.draw(c, paint, path, rect, UiSpec.iconOf(k), x0 + step * k, y, is, UiSpec.color(k));
     }
 
     private void drawTitle(Canvas c) {
@@ -3212,7 +3275,8 @@ public class GameView extends View {
         float iy = cy + dp(62);
         text(c, "手指拖动 = 飞机同步移动", W / 2f, iy, dp(16), TXT, 1);
         text(c, "不用点到飞机 · 机头恒朝上 · 自动开火", W / 2f, iy + dp(25), dp(13), TXT_DIM, 1);
-        text(c, "吃道具：火力 护盾 生命 炸弹 速射 分数", W / 2f, iy + dp(46), dp(13), TXT_DIM, 1);
+        text(c, "吃道具", W / 2f, iy + dp(46), dp(13), TXT_DIM, 1);
+        drawLegend(c, W / 2f, iy + dp(64));
 
         float hintY = H - botPad - dp(44);
         float optTop = drawOptions(c, W / 2f, hintY - dp(26));
