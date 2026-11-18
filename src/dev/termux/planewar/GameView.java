@@ -153,6 +153,7 @@ public class GameView extends View {
     int bossesKilled;             // scales the next boss
     float nextBossAt = 80f;       // natural arrival time
     int bossHook;                 // test hook: force N boss arrivals
+    int bossHookKind;             // test hook: next forced boss kind, so --ei boss 3 shows all 3
     float bossHookNext;
     boolean feverWas;             // rising edge detector for the fever banner
     int grazeHook;                // test hook: fire N grazes during a run
@@ -759,7 +760,7 @@ public class GameView extends View {
         if (bossHook > 0 && time >= bossHookNext) {
             bossHookNext += 12f;
             bossHook--;
-            spawnBoss(bossesKilled);
+            spawnBoss(bossHookKind++);
         }
         updateBoss(dt);
 
