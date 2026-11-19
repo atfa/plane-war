@@ -6,6 +6,33 @@
 
 **下载**：[Releases](https://github.com/atfa/plane-war/releases) 里的 `plane.apk`（约 90 KB，Android 7.0+ / API 24，包名 `dev.xduo.plane`）。APK 不放在 git 里，只作为 Release 资产发布。
 
+## 截图
+
+<table>
+<tr>
+<td><img src="docs/screenshots/showcase.png" width="230" alt="美术展示钩子下的全部敌机与玩家机"></td>
+<td><img src="docs/screenshots/battle.png" width="230" alt="战斗中：连击、护盾、火力等级、技能充能"></td>
+<td><img src="docs/screenshots/title.png" width="230" alt="标题界面：难度、拖动灵敏度、排行榜"></td>
+</tr>
+<tr>
+<td align="center">9 种敌机全员展示（`--ei show 9`）</td>
+<td align="center">战斗中：连击 / 护盾 / 火力 / 技能</td>
+<td align="center">标题界面：难度 / 灵敏度 / 排行榜</td>
+</tr>
+</table>
+
+三张都是在这台手机上用 `shot.sh` 截的（屏幕原生 1440x2304，裁到游戏窗口 776x1424）：
+
+```sh
+./shot.sh --ez autostart true --ez god true --ez autopilot false --ei show 9   # 展示图
+./shot.sh --ez autostart true --ez god true                                    # 战斗
+./shot.sh --ez autostart false                                                 # 标题
+```
+
+`--ei show 9` 是测试钩子：把 9 种敌机按体型分三行悬停（小的在上、胖的居中、剩下的在下，不射击、不掉血、不爆炸），
+图里下中间那架是玩家机自己在飞，不是钩子摆的；BOSS 不在这个钩子里，用 `--ei boss 3` 强制三次 BOSS 登场（隔 12 秒轮完三种）。
+所以游戏一共 13 种机型：9 种敌机 + 玩家机 + 3 种 BOSS。
+
 ## 全程在手机上开发（无电脑）
 
 开发环境就是这台手机：Termux（`aarch64`）+ 一套原生命令行工具，没有交叉编译、没有模拟器。
@@ -158,7 +185,7 @@ BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难
   （半径下限 `CORE_MIN_DP = 2.5dp`），保证小尺寸下也能一眼认出是什么机。
 * 保留原有表现：受击白闪 `e.flash`、玩家无敌闪烁、倾斜 `bank`、护盾泡泡、狂热/连击火焰颜色、
   狙击锁红线、BOSS 三阶段核心灯（读 `Boss.PHASES`）、血条、HUD 全部不变。
-* 测试钩子：`am start ... --ei show N` 把前 N 种敌机排成两行悬停（不射击、不掉血、不爆炸），
+* 测试钩子：`am start ... --ei show N` 把前 N 种敌机按体型分三行悬停（不射击、不掉血、不爆炸），
   日志 `show n=`，专供截图逐架比对美术。
 
 ## 构建

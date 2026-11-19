@@ -256,7 +256,8 @@
   三段；`GLASS` 用 `RadialGradient` 在 15dp 下糊成一团白，改成三段 `LinearGradient`（亮机头 →
   中段 → 座舱色）+ 描边 + 一道高光；`METAL_HI`（接近白）做大件填充（炮塔盘、水雷球）在
   r=46dp 下读成墓碑，大件一律用 `METAL`，`METAL_HI` 只留给小装饰。
-- 新增测试钩子：`am start ... --ei show N` 让前 N 种敌机排两行悬停（`vx=vy=0`、`fire=999f`、
+- 新增测试钩子：`am start ... --ei show N` 让前 N 种敌机按体型分三行悬停（`rowY = {0.20f, 0.40f, 0.60f}`，
+  0..3 小机 / 4..6 胖机 / 7..8 剩下的；`vx=vy=0`、`fire=999f`、
   `hp=maxhp=1e9f`、`showNoFire` 关掉玩家射击），日志 `show n=`，专供截图比对。
 - 验收后的两处修正（Tony 的 nit）：`Ships.brightEnd(id)` 按识别色亮度自适应机头亮端
   （识别色本身接近白的 splitter/miner 少加白，否则全场最淡的一架读成「白薄荷」）；
