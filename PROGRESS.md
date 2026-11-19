@@ -285,6 +285,12 @@
   （`dumpsys package` 报 `dataDir=/data/user/0/...` 与 `/data/user/10/...`，而 `/data/user/10` 不存在，
   `run-as` 又报 `/data/user has wrong owner`），KernelSU 命名空间下应用数据目录不可见，
   所以「旧 app 里还存着最高分 102719」这句旧记录不能当事实写进报告。
+- 环境事实（Tony 验收时踩到）：**`pm install -g /sdcard/Download/plane.apk` 会失败** —— `system_server`
+  读 `/sdcard` 受 FUSE 权限限制，要先 `cp` 到 `/data/local/tmp` 再 `pm install -g`。
+  从 Download 那份装成功即证明交付文件本身可用（`topResumedActivity=dev.xduo.plane/.MainActivity`）。
+- 连续循环的抖动补充（Tony 4 轮 0/1/2）：1 次 DIFF=1 `install failed`、1 次 DIFF=2
+  `persist: loaded best=0`/`superFails=none`（同轮 fps 60.2 正常），最后一轮三档全 PASS。
+  改名没动 `test.sh` 的轮询逻辑，双方同意记为既有抖动，本轮不修。
 - `DIFF=0/1/2` 连续跑时 DIFF=2 出现过 2 次 FAIL（`run:` 空、`fps: none`，但同轮
   `persist: loaded best=184414` 说明游戏跑完并结算了，是 `gameover` 行没被
   `logcat -d` 抓到）；DIFF=2 单独跑、以及 DIFF=1 之后跑都 PASS。改名前（`57e5cf4`）同一循环三档全 PASS，
