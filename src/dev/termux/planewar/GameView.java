@@ -497,18 +497,27 @@ public class GameView extends View {
         int n = hookShow;
         hookShow = 0;
         showNoFire = true;
-        // two rows, small types first: the heavy and the mothership are 3x the span of a grunt and
-        // would overlap their neighbours in a single evenly spaced line
+        // three rows, small types first: heavy (r46) and mothership (r38) are 3x the span of a
+        // grunt, so in a single evenly spaced line they sat on their neighbours and hid them.
+        // 0..3 small, 4..6 the fat ones, 7..8 the rest.
+        int[] rowOf = new int[ShipSpec.ENEMY_TYPES];
+        for (int i = 0; i < rowOf.length; i++) rowOf[i] = i < 4 ? 0 : (i < 7 ? 1 : 2);
+        float[] rowY = {0.20f, 0.40f, 0.60f};
         for (int i = 0; i < n; i++) {
-            int row = i < 5 ? 0 : 1;
-            int col = row == 0 ? i : i - 5;
-            int per = row == 0 ? Math.min(n, 5) : n - 5;
+            int row = rowOf[i];
+            int col = 0, per = 0;
+            for (int k = 0; k < n; k++) {
+                if (rowOf[k] != row) continue;
+                if (k == i) col = per;
+                per++;
+            }
             spawnEnemy(i, W * (col + 1) / (per + 1f));
             Enemy e = enemies.get(enemies.size() - 1);
-            e.y = H * (row == 0 ? 0.24f : 0.46f);
+            e.y = H * rowY[row];
             e.vx = 0;
             e.vy = 0;              // hover: the row has to survive the screenshot
             e.fire = 999f;         // and stay quiet while it is photographed
+            e.pinned = true;       // no strafe, no dive, no summoned grunts
             e.hp = e.maxhp = 1e9f;  // the player's fire (and the autopilot's) cannot clear it
         }
         Log.i(TAG, "show n=" + n);
@@ -1378,6 +1387,10 @@ public class GameView extends View {
             Enemy e = enemies.get(i);
             e.t += dt * slow;
             if (e.flash > 0) e.flash--;
+            // --ei show: the row is a museum display. Hovering types overwrite vx/vy every frame
+            // and the miner / mothership clamp their own fire timer, so pinning them here is the
+            // only way to keep the row still, silent and free of summoned grunts.
+            if (e.pinned) continue;
             switch (e.type) {
                 case 1: // darter dives at the player after entering
                     if (e.t > 0.7f) {

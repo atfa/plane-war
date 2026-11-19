@@ -27,6 +27,7 @@ class Enemy {
     int flash;            // white flash frames after a hit
     int hover;            // 0 = descending, 1 = in attack pattern
     boolean swept;        // already hit by the current 大地裂变 quake wave
+    boolean pinned;       // --ei show: museum display, no motion, no shots
 }
 
 class PowerUp {

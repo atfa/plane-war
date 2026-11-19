@@ -60,13 +60,25 @@ final class Ships {
     private static final int[] RIM = new int[ShipSpec.COUNT];
     private static final int[] HOT = new int[ShipSpec.COUNT];
 
+    /**
+     * How much white goes on the lit nose. Pale identities (splitter's mint, miner's gold) are
+     * already near white, so a fixed 0.38 washed them out and they read as "the pale ship" - the
+     * lighter the ship's own colour, the less white it gets.
+     */
+    private static float brightEnd(int id) {
+        int c = ShipSpec.identity(id);
+        int luma = (ShipSpec.red(c) * 77 + ShipSpec.green(c) * 150 + ShipSpec.blue(c) * 29) >> 8;
+        float k = 1f - Math.max(0f, (luma - 170f) / 85f);
+        return Math.max(0.12f, 0.38f * k);
+    }
+
     static {
         for (int i = 0; i < ShipSpec.COUNT; i++) {
             int id = ShipSpec.identity(i);
             // three stops: a lit nose, the ship's own saturated colour across the middle,
             // and shadowed plating at the tail. Two stops (light -> dark) washed the hulls out.
             HULL[i] = new LinearGradient(0f, -1.15f, 0.35f, 1f,
-                    new int[]{ShipSpec.tint(id, 0.38f), id, ShipSpec.hullBottom(i)},
+                    new int[]{ShipSpec.tint(id, brightEnd(i)), id, ShipSpec.hullBottom(i)},
                     new float[]{0f, 0.42f, 1f}, Shader.TileMode.CLAMP);
             GLASS[i] = new LinearGradient(0f, -1f, 0f, 1f,
                     new int[]{ShipSpec.tint(id, 0.78f), ShipSpec.tint(id, 0.30f),

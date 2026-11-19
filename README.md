@@ -109,13 +109,13 @@ BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难
 以前 13 架飞机都是「一个多边形 + 一个实心圆点」，15dp 的小敌机和 60dp 的 BOSS 长得一样。
 现在换成一套 Canvas 矢量美术层，全部代码画，**不新增任何位图/字体/权限资源**：
 
-* `Ships.java`：13 套剪例（玩家拦截机、9 种敌机、3 种 BOSS），入口只有一个
+* `Ships.java`：13 套剪影（玩家拦截机、9 种敌机、3 种 BOSS），入口只有一个
   `Ships.draw(c, p, path, rect, id, cx, cy, r, t, tint, flame, rot, aux)`。约定：
   复用调用方的 `Paint`/`Path`/`RectF`，**每帧零分配**（所有 `Path`/`Shader`/颜色数组都是
   `static final`），画完恢复画笔状态；所有路径在**单位空间** `[-1,1]`（机头朝上），
   渐变也在单位空间里算，所以一份静态 `Shader` 在任意尺寸下都对；敌机由调用方转 180°。
 * `ShipSpec.java`（**纯 Java**）：美术唯一真值表 — 每架飞机的识别色/上壳色/下壳色/点缀色/
-  座舱色/修边色/光晕色、剪例编号 `SIL_*`、机头半径 `noseR`、核心灯半径 `coreRadiusDp`、
+  座舱色/修边色/光晕色、剪影编号 `SIL_*`、机头半径 `noseR`、核心灯半径 `coreRadiusDp`、
   每架飞机的图层配额 `layers`（grunt/darter/sniper 4，splitter/gunship/elite/miner 6，
   heavy/mother 7，玩家 8，BOSS 9），以及颜色算子 `mix`/`shade`/`tint`/`alpha`。
   `Ships` 不许自己发明颜色，只从 `ShipSpec` 取。
@@ -234,7 +234,7 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 | `test/TestLogic.java` + `test_jvm.sh` | 纯逻辑类的 JVM 断言（无需手机） |
 | `src/dev/termux/planewar/Icons.java` | 17 个 Canvas 矢量图标，零分配绘制（复用调用方 Paint/Path/RectF） |
 | `src/dev/termux/planewar/Ships.java` | 13 架飞机的 Canvas 矢量美术层（单位空间路径 + 静态渐变，每帧零分配） |
-| `src/dev/termux/planewar/ShipSpec.java` | 飞机美术唯一真值表（识别色/剪例/图层配额/核心灯半径），**纯 Java** |
+| `src/dev/termux/planewar/ShipSpec.java` | 飞机美术唯一真值表（识别色/剪影/图层配额/核心灯半径），**纯 Java** |
 | `test/TestShips.java` | `ShipSpec` 的 JVM 断言（识别色逐字节不变、图层配额、帧操作上限、核心灯下限） |
 | `src/dev/termux/planewar/UiSpec.java` | 道具颜色/短标签/图标唯一真值表 + 图标尺寸常量，**纯 Java** |
 | `test/TestUi.java` | `UiSpec` 的 JVM 断言（真值表完整性、颜色逐字节不变、图标映射全覆盖） |
