@@ -1,5 +1,7 @@
 # 雷霆战机 (Plane War)
 
+> **v1.0.0 已发布**：APK 下载见 [Release v1.0.0](https://github.com/atfa/plane-war/releases/tag/v1.0.0)，源码仓库 [github.com/atfa/plane-war](https://github.com/atfa/plane-war)（在父项目 development-on-Android 里时，这里是它的 `plane/` 子目录）。
+
 2D 竖版飞机大战。**整个游戏是在一台安卓手机上写完、编译、签名、安装、验收的，全程没有碰电脑**：没有 PC、没有 Android Studio、没有 Gradle，也没有数据线。
 
 > A vertical 2D shoot-'em-up that was written, built, signed, installed and tested **entirely on an Android phone** — no PC, no Android Studio, no Gradle. The on-device toolchain comes from the agent skill [dev-apk-on-android](https://github.com/atfa/dev-apk-on-android); the coding agents are [pi](https://github.com/earendil-works/pi) and [duo](https://github.com/atfa/duo), two peer agents that plan, implement and cross-review each other.

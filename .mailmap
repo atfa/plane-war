@@ -1,0 +1,4 @@
+# git 作者名规范化。
+# 开发过程中两个 agent 的提交身份大小写不一致（`tony` / `Tony`），这里统一显示为 Tony。
+# 语法：正确名字 <正确邮箱> 提交名字 <提交邮箱>
+Tony <tony@duo.local> tony <tony@duo.local>
