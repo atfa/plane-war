@@ -279,7 +279,16 @@
   SharedPreferences 名 `planewar_board`（`Scores.java:23`）/`planewar_opts`（`GameView.java:67`）、
   `app_name`「雷霆战机」、versionCode/versionName、debug keystore。
 - 副作用（已写进 README）：新包是**另一个 app**，与旧 `dev.termux.planewar` 共存，启动器里出现
-  两个同名「雷霆战机」图标；存档按包隔离，新 app 排行榜从空开始，旧最高分留在旧 app 里。
+  两个同名「雷霆战机」图标（`app_name` 未改）；存档按包隔离，改名不迁移任何东西。
+  新包的存档本轮实测可用（DIFF=0 跑完 `gameover score=61821`，重启后 `loaded best=61821`）。
+  旧 app 的存档**无法从本 shell 确认**：`su -c "ls /data/user/0"` 里两个包的数据目录都查不到
+  （`dumpsys package` 报 `dataDir=/data/user/0/...` 与 `/data/user/10/...`，而 `/data/user/10` 不存在，
+  `run-as` 又报 `/data/user has wrong owner`），KernelSU 命名空间下应用数据目录不可见，
+  所以「旧 app 里还存着最高分 102719」这句旧记录不能当事实写进报告。
+- `DIFF=0/1/2` 连续跑时 DIFF=2 出现过 2 次 FAIL（`run:` 空、`fps: none`，但同轮
+  `persist: loaded best=184414` 说明游戏跑完并结算了，是 `gameover` 行没被
+  `logcat -d` 抓到）；DIFF=2 单独跑、以及 DIFF=1 之后跑都 PASS。改名前（`57e5cf4`）同一循环三档全 PASS，
+  这是 `test.sh` 轮询/logcat 抓取的既有抖动，不是改名引入的，未在本轮修。
 - 验收：`aapt2 dump badging` 的 `package: name='dev.xduo.plane'` + `launchable-activity`；
   `test_jvm.sh` 四套断言数与改名前完全一致（7921/54654/82/471）；`DIFF=0/1/2 ./test.sh` 三档全 PASS；
   `plane.apk` 复制到 `/sdcard/Download/plane.apk` 并核对 md5 一致。

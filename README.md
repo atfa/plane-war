@@ -144,7 +144,9 @@ cd ~/fix/plane
 只改 manifest 不改目录，源码里的非限定 `R` 会编译失败。
 logcat TAG 仍是 `planewar`（它是日志标签，不是包名，`test.sh` 的 grep 依赖它），
 SharedPreferences 名仍是 `planewar_board` / `planewar_opts`，应用名仍是「雷霆战机」。
-旧包 `dev.termux.planewar` 是另一个 app：两者可共存，排行榜各自独立（存档按包隔离）。
+旧包 `dev.termux.planewar` 是另一个 app：两者可共存（启动器里会出现两个同名「雷霆战机」图标，
+App 信息页里看包名区分），存档按包隔离，改名不迁移存档。卸载旧的：
+`su -c "pm uninstall dev.termux.planewar"`。
 
 ## 自动化测试
 
