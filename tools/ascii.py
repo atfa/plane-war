@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # Vendored copy of ascii.py from the dev-apk-on-android agent skill
 # (https://github.com/atfa/dev-apk-on-android, MIT). Kept in-tree so the screenshot
 # checks in this repo run on a fresh clone with no extra PYTHONPATH.
-#!/usr/bin/env python3
 """PNG -> ASCII art, pure stdlib (no PIL).  usage: ascii.py img.png [width] [step]
 
 Saturated colours become letters (G red-dominant..., useful for spotting UI elements):

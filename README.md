@@ -164,7 +164,7 @@ BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难
 ## 构建
 
 ```sh
-cd plane
+# 在仓库根目录执行（在父仓库 development-on-Android 里就是它的 plane/ 子目录）
 ./build.sh          # -> plane.apk
 ./install.sh        # root 安装并启动
 ```
