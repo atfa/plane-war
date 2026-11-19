@@ -1,6 +1,40 @@
 # 雷霆战机 (Plane War)
 
-2D 竖版飞机大战，完全在这台 Android 手机里（Termux）编译、签名、安装，不需要 PC / Android Studio / Gradle。
+2D 竖版飞机大战。**整个游戏是在一台安卓手机上写完、编译、签名、安装、验收的，全程没有碰电脑**：没有 PC、没有 Android Studio、没有 Gradle，也没有数据线。
+
+> A vertical 2D shoot-'em-up that was written, built, signed, installed and tested **entirely on an Android phone** — no PC, no Android Studio, no Gradle. The on-device toolchain comes from the agent skill [dev-apk-on-android](https://github.com/atfa/dev-apk-on-android); the coding agents are [pi](https://github.com/earendil-works/pi) and [duo](https://github.com/atfa/duo), two peer agents that plan, implement and cross-review each other.
+
+**下载**：[Releases](https://github.com/atfa/plane-war/releases) 里的 `plane.apk`（约 90 KB，Android 7.0+ / API 24，包名 `dev.xduo.plane`）。APK 不放在 git 里，只作为 Release 资产发布。
+
+## 全程在手机上开发（无电脑）
+
+开发环境就是这台手机：Termux（`aarch64`）+ 一套原生命令行工具，没有交叉编译、没有模拟器。
+
+| 环节 | 用什么 |
+|----|----|
+| 资源编译 / 打包 | `aapt2 compile` + `aapt2 link`（Termux 包） |
+| 编译 | `javac --release 8` + `android.jar` (android-33) |
+| dex | `R8`（`com.android.tools.r8.D8`，Termux 的 `d8` 在 JDK 21 的 `NestMembers` 上会崩） |
+| 签名 | `apksigner`（v1+v2+v3），debug keystore 缺失时 `keytool` 自动生成 |
+| 安装 / 启动 / 日志 | `pm install` + `am start` + `logcat`（这台手机有 root，脚本用 `su -c`） |
+| 验收 | 截图 + 按像素颜色校验（`shot.sh` / `check.py`） |
+
+* **Agent Skill**：[atfa/dev-apk-on-android](https://github.com/atfa/dev-apk-on-android) —— 在手机上「编译 → 签名 → 安装 → logcat 验收 → 截图像素校验」的完整流程与工具链，`build.sh` / `install.sh` / `test.sh` / `shot.sh` 都是按它写的。
+* **编码 agent**：[pi](https://github.com/earendil-works/pi) 负责写代码与跑命令，[duo](https://github.com/atfa/duo) 让两个 agent（Austin 与 Tony）以平等身份协作 —— 一份共享计划、各自独立 worktree、交叉审查对方的提交、双方签署才落地。本仓库的提交历史里能看到这种协作痕迹（作者有 `Austin <austin@duo.local>` 与 `Tony <tony@duo.local>`）。
+* **美术全部是代码画的**：13 架飞机、17 个图标都是 Canvas 矢量路径（`Ships.java` / `Icons.java`），仓库里除了启动图标没有任何位图资源。
+* **验收也是自动的**：`test_jvm.sh` 在 JVM 上跑 4 套断言（7921 / 54654 / 82 / 471 项），`test.sh` 在真机上自动试玩三档难度并检查日志与帧率，`shot.sh` + `check.py` 用像素颜色确认美术没被改坏。
+
+## 安装
+
+1. 从 [Releases](https://github.com/atfa/plane-war/releases) 下载 `plane.apk`。
+2. 手机上打开，允许「安装未知来源应用」，安装后启动「雷霆战机」。
+3. 命令行安装（Termux，需 root）：`pm install` 读不了 `/sdcard`（`system_server` 受 FUSE 权限限制），要先暂存：
+
+```sh
+cp /sdcard/Download/plane.apk /data/local/tmp/ && su -c "pm install -g /data/local/tmp/plane.apk"
+```
+
+旧包名 `dev.termux.planewar` 是另一个 app，两者可共存（启动器里会出现两个同名图标，App 信息页看包名区分），存档按包隔离。卸载旧的：`su -c "pm uninstall dev.termux.planewar"`。
 
 ## 玩法
 
@@ -130,10 +164,12 @@ BOSS 血量不在这张表里：它走 `Boss.java` 的 `HP[] × (1 + 0.35 × 难
 ## 构建
 
 ```sh
-cd ~/fix/plane
+cd plane
 ./build.sh          # -> plane.apk
 ./install.sh        # root 安装并启动
 ```
+
+前置条件：Termux + [dev-apk-on-android](https://github.com/atfa/dev-apk-on-android) 这套技能提供的工具链（`aapt2`、`javac`、`apksigner`、`android.jar` 33、`r8.jar`）。`ANDROID_HOME` 未设置时 `build.sh` 用 `$HOME/android-sdk`；debug keystore 在 `$HOME/.android/debug.keystore`，缺失时自动 `keytool` 生成（所以仓库里不含密钥）。
 
 工具链：`aapt2` + `javac`（`--release 8` + android.jar 33）+ `r8.jar` + `apksigner`。
 `build.sh` 会检查 `classes.dex` 里是否包含 `MainActivity`（R8 的 `-dontobfuscify` 选项不存在，
@@ -222,6 +258,11 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 `shot.sh` 会先唤醒屏幕、回桌面（Android 14+ 从 shell 起 Activity 需要桌面在最前），再带钩子启动，
 等 `WAIT` 秒（默认 9）后截图，最后跑 `view.py`；`PIX=1` 追加 `check.py`。
 
+这四个脚本（`view.py` / `check.py` / `crop.py` / `pngcrop.py`）都靠一个纯 stdlib 的 PNG→ASCII 渲染器
+`ascii.py`，它来自 [dev-apk-on-android](https://github.com/atfa/dev-apk-on-android)，已**内置在 `tools/ascii.py`**，
+全新 clone 不需要额外依赖。查找顺序：环境变量 `SKILL_SCRIPTS` → 仓库内 `tools/` → 开发机上的技能路径
+（`tools/skillpath.py`）。
+
 注意：`input tap` 用的是屏幕坐标，游戏视图从 y=100 开始（导航栏），
 所以点视图里的 (x, y) 要 `input tap x (y+100)`。日志 `size 1080.0x2300.0` 可确认。
 
@@ -229,7 +270,10 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 
 | 文件 | 说明 |
 |------|------|
-| `PROGRESS.md` | 本次 Duo 会话的进度与环境事实速查（交接用） || `src/dev/xduo/plane/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
+| `PROGRESS.md` | 开发日志：每一轮改了什么、踩了什么坑、这台手机的环境事实速查（交接用） |
+| `PUBLISH.md` | 发布日志：独立仓库 / Release 的发布过程与双仓库提交约定 |
+| `docs/screenshots/` | 真机截图 |
+| `src/dev/xduo/plane/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
 | `src/dev/xduo/plane/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
 | `src/dev/xduo/plane/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
 | `src/dev/xduo/plane/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
@@ -250,3 +294,10 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 | `shot.sh` / `pngcrop.py` | 带钩子启动并截图 / 把截图的一块区域裁成 png 看细节 |
 | `gen_icon.py` | 生成各密度启动图标 |
 | `view.py` / `check.py` / `crop.py` | 截图 ASCII 预览 / 颜色校验 / 区域放大 |
+| `tools/ascii.py` | 内置的 PNG→ASCII 渲染器（来自 dev-apk-on-android 技能，纯 stdlib） |
+
+`check.py` 的 9 个识别色桶是美术回归的门禁：改完美术跑一次 `check.py`，九桶必须全非零。
+
+## 许可
+
+MIT（见 `LICENSE`）。

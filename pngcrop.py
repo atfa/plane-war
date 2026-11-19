@@ -6,9 +6,8 @@ usage: pngcrop.py x0 y0 x1 y1 out.png [scale] [png]
 """
 import sys, os, zlib, struct
 
-sys.path.insert(0, os.path.expanduser("~/fix/.agents/skills/android-on-device-apk/scripts"))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "..", ".agents", "skills", "android-on-device-apk", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+import skillpath; skillpath.add()  # noqa: E402
 import contextlib, io
 _argv = sys.argv[:]
 _png = os.environ["TMPDIR"] + "/screen.png"

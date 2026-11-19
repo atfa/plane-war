@@ -7,7 +7,7 @@ PLATFORM="android-33"
 JAR="$SDK_DIR/platforms/$PLATFORM/android.jar"
 MIN_API=24
 APK=plane.apk
-[ -f "$JAR" ] || { echo "missing $JAR - run ../apkdemo/get-sdk.sh"; exit 1; }
+[ -f "$JAR" ] || { echo "missing $JAR - 需要 android-33 的 android.jar（ANDROID_HOME 默认 \$HOME/android-sdk），工具链与获取方式见 https://github.com/atfa/dev-apk-on-android"; exit 1; }
 
 OUT=out
 rm -rf "$OUT"; mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/apk"

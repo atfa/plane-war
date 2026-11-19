@@ -3,8 +3,8 @@
 usage: check.py [png]"""
 import sys, os
 
-sys.path.insert(0, os.path.expanduser(
-    "~/fix/.agents/skills/android-on-device-apk/scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+import skillpath; skillpath.add()  # noqa: E402
 import contextlib, io  # noqa: E402
 # ascii.py has no __main__ guard: it renders on import, so feed it our png
 # and swallow that output.

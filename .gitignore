@@ -1,0 +1,9 @@
+# 构建产物（build.sh 每次重建）
+out/
+# APK 不进 git，作为 GitHub Release 资产发布
+plane.apk
+plane.apk.idsig
+# 开发期临时文件
+.tmp/
+__pycache__/
+*.pyc
