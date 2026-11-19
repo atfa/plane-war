@@ -9,7 +9,7 @@
 # The loop is vsync driven and the game pauses when a notification steals focus, so the
 # test keeps waking the screen and polls the log instead of sleeping a fixed time.
 set -uo pipefail
-PKG=dev.termux.planewar
+PKG=dev.xduo.plane
 APK=$(readlink -f "${1:-plane.apk}")
 
 DIFF=${DIFF:-0}   # 0 简单 1 普通 2 困难

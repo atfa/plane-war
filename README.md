@@ -139,6 +139,13 @@ cd ~/fix/plane
 `build.sh` 会检查 `classes.dex` 里是否包含 `MainActivity`（R8 的 `-dontobfuscify` 选项不存在，
 真正起作用的是 `-dontobfuscate`，见 `proguard-rules.pro`）。
 
+**包名 `dev.xduo.plane`**。这个项目没有 Gradle，包名由 `AndroidManifest.xml` 的 `package` 决定，
+`aapt2 link --java` 按它生成 `R.java`，所以 Java 包目录必须与它一致（`src/dev/xduo/plane/`）；
+只改 manifest 不改目录，源码里的非限定 `R` 会编译失败。
+logcat TAG 仍是 `planewar`（它是日志标签，不是包名，`test.sh` 的 grep 依赖它），
+SharedPreferences 名仍是 `planewar_board` / `planewar_opts`，应用名仍是「雷霆战机」。
+旧包 `dev.termux.planewar` 是另一个 app：两者可共存，排行榜各自独立（存档按包隔离）。
+
 ## 自动化测试
 
 ```sh
@@ -220,23 +227,23 @@ python crop.py 259 1576 820 1660 60            # 放大某块像素区域（x0 y
 
 | 文件 | 说明 |
 |------|------|
-| `PROGRESS.md` | 本次 Duo 会话的进度与环境事实速查（交接用） || `src/dev/termux/planewar/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
-| `src/dev/termux/planewar/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
-| `src/dev/termux/planewar/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
-| `src/dev/termux/planewar/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
-| `src/dev/termux/planewar/Boss.java` | 3 阶段 BOSS 状态机（阶段阈值/弹幕节奏/召唤上限），**纯 Java**；**BOSS 血量走这里的 `HP[]`×(1+0.35×难度)，与 `Tuning` 的敌机难度系数是两套** |
-| `src/dev/termux/planewar/Weapon.java` | 玩家弹形表（LV1-5）、导弹数、激光结算周期、锁定目标选择，**纯 Java** |
-| `src/dev/termux/planewar/Wave.java` | 编队图案（V/一字/钳形/正弦/缺口墙）→ (delay, type, lane)，lane 为 [0,1] 分数，**纯 Java** |
-| `src/dev/termux/planewar/AudioFx.java` | 运行时合成 15 种音效 + 循环芯片音乐 |
-| `src/dev/termux/planewar/Vibro.java` | 震动封装（API 24 / 31+） |
-| `src/dev/termux/planewar/Scores.java` | 本地排行榜（SharedPreferences） |
-| `src/dev/termux/planewar/Entities.java` | 子弹/敌人/道具/粒子数据类 |
+| `PROGRESS.md` | 本次 Duo 会话的进度与环境事实速查（交接用） || `src/dev/xduo/plane/GameView.java` | 游戏主循环、绘制、触摸、敌人、事件、粒子、主动技能 |
+| `src/dev/xduo/plane/MainActivity.java` | 全屏 Activity，读取测试 intent 参数 |
+| `src/dev/xduo/plane/Tuning.java` | 新玩法数值总表（能量/炸弹/擦弹/狂热），按 3 难度缩放，**纯 Java** |
+| `src/dev/xduo/plane/Super.java` | 5 种超必杀主题的伤害/范围/效果，**纯 Java** |
+| `src/dev/xduo/plane/Boss.java` | 3 阶段 BOSS 状态机（阶段阈值/弹幕节奏/召唤上限），**纯 Java**；**BOSS 血量走这里的 `HP[]`×(1+0.35×难度)，与 `Tuning` 的敌机难度系数是两套** |
+| `src/dev/xduo/plane/Weapon.java` | 玩家弹形表（LV1-5）、导弹数、激光结算周期、锁定目标选择，**纯 Java** |
+| `src/dev/xduo/plane/Wave.java` | 编队图案（V/一字/钳形/正弦/缺口墙）→ (delay, type, lane)，lane 为 [0,1] 分数，**纯 Java** |
+| `src/dev/xduo/plane/AudioFx.java` | 运行时合成 15 种音效 + 循环芯片音乐 |
+| `src/dev/xduo/plane/Vibro.java` | 震动封装（API 24 / 31+） |
+| `src/dev/xduo/plane/Scores.java` | 本地排行榜（SharedPreferences） |
+| `src/dev/xduo/plane/Entities.java` | 子弹/敌人/道具/粒子数据类 |
 | `test/TestLogic.java` + `test_jvm.sh` | 纯逻辑类的 JVM 断言（无需手机） |
-| `src/dev/termux/planewar/Icons.java` | 17 个 Canvas 矢量图标，零分配绘制（复用调用方 Paint/Path/RectF） |
-| `src/dev/termux/planewar/Ships.java` | 13 架飞机的 Canvas 矢量美术层（单位空间路径 + 静态渐变，每帧零分配） |
-| `src/dev/termux/planewar/ShipSpec.java` | 飞机美术唯一真值表（识别色/剪影/图层配额/核心灯半径），**纯 Java** |
+| `src/dev/xduo/plane/Icons.java` | 17 个 Canvas 矢量图标，零分配绘制（复用调用方 Paint/Path/RectF） |
+| `src/dev/xduo/plane/Ships.java` | 13 架飞机的 Canvas 矢量美术层（单位空间路径 + 静态渐变，每帧零分配） |
+| `src/dev/xduo/plane/ShipSpec.java` | 飞机美术唯一真值表（识别色/剪影/图层配额/核心灯半径），**纯 Java** |
 | `test/TestShips.java` | `ShipSpec` 的 JVM 断言（识别色逐字节不变、图层配额、帧操作上限、核心灯下限） |
-| `src/dev/termux/planewar/UiSpec.java` | 道具颜色/短标签/图标唯一真值表 + 图标尺寸常量，**纯 Java** |
+| `src/dev/xduo/plane/UiSpec.java` | 道具颜色/短标签/图标唯一真值表 + 图标尺寸常量，**纯 Java** |
 | `test/TestUi.java` | `UiSpec` 的 JVM 断言（真值表完整性、颜色逐字节不变、图标映射全覆盖） |
 | `shot.sh` / `pngcrop.py` | 带钩子启动并截图 / 把截图的一块区域裁成 png 看细节 |
 | `gen_icon.py` | 生成各密度启动图标 |

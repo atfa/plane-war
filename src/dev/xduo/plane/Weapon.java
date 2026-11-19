@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * Player weapon table + target selection, as pure Java (no Android imports) so the JVM suite

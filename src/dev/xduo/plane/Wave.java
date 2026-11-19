@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * Formation waves: pattern geometry as pure Java (no Android imports), so the JVM suite

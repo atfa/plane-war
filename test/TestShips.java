@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * JVM assertions for the ship art contract in ShipSpec (no Android, no device).

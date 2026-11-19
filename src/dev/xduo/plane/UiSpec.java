@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * The HUD contract: power-up kinds, their colours, their Chinese labels, the icon each one maps to,

@@ -8,22 +8,22 @@ OUT=out/test
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-SRC="src/dev/termux/planewar/Tuning.java
-src/dev/termux/planewar/Super.java
-src/dev/termux/planewar/Boss.java
-src/dev/termux/planewar/Weapon.java
-src/dev/termux/planewar/Wave.java
-src/dev/termux/planewar/UiSpec.java
-src/dev/termux/planewar/ShipSpec.java
+SRC="src/dev/xduo/plane/Tuning.java
+src/dev/xduo/plane/Super.java
+src/dev/xduo/plane/Boss.java
+src/dev/xduo/plane/Weapon.java
+src/dev/xduo/plane/Wave.java
+src/dev/xduo/plane/UiSpec.java
+src/dev/xduo/plane/ShipSpec.java
 test/TestLogic.java
 test/TestBoss.java
 test/TestUi.java
 test/TestShips.java"
 
 # the pure classes must stay free of Android: that is what makes this suite runnable without a phone
-ANDROID=$(grep -l "import android" src/dev/termux/planewar/Tuning.java src/dev/termux/planewar/Super.java \
-  src/dev/termux/planewar/Boss.java src/dev/termux/planewar/Weapon.java src/dev/termux/planewar/Wave.java \
-  src/dev/termux/planewar/UiSpec.java src/dev/termux/planewar/ShipSpec.java 2>/dev/null)
+ANDROID=$(grep -l "import android" src/dev/xduo/plane/Tuning.java src/dev/xduo/plane/Super.java \
+  src/dev/xduo/plane/Boss.java src/dev/xduo/plane/Weapon.java src/dev/xduo/plane/Wave.java \
+  src/dev/xduo/plane/UiSpec.java src/dev/xduo/plane/ShipSpec.java 2>/dev/null)
 if [ -n "$ANDROID" ]; then
   echo "FAIL: pure-logic class imports Android, the JVM suite cannot cover it: $ANDROID"
   exit 1
@@ -32,7 +32,7 @@ fi
 out=$(javac -nowarn -d "$OUT" $SRC 2>&1)
 rc=$?
 echo "$out" | grep -v '^Note:' || true
-if [ $rc -ne 0 ] || [ ! -f "$OUT/dev/termux/planewar/TestLogic.class" ]; then
+if [ $rc -ne 0 ] || [ ! -f "$OUT/dev/xduo/plane/TestLogic.class" ]; then
   echo "FAIL: javac (rc=$rc)"
   exit 1
 fi
@@ -41,7 +41,7 @@ fi
 # grepped, so assert it names every silhouette ShipSpec declares. A silhouette Ships never draws is
 # an aircraft that renders as the fallback shape, which is exactly the "everything looks the same"
 # regression this suite exists to catch.
-SHIPS=src/dev/termux/planewar/Ships.java
+SHIPS=src/dev/xduo/plane/Ships.java
 if [ -f "$SHIPS" ]; then
   missing=""
   for s in INTERCEPTOR DIAMOND ARROW HEXPOD PENTAGON BROADSIDE LOBES BARGE NEEDLE SAUCER \
@@ -56,7 +56,7 @@ fi
 
 rc=0
 for t in TestLogic TestBoss TestUi TestShips; do
-  if java -cp "$OUT" dev.termux.planewar.$t; then :; else rc=1; fi
+  if java -cp "$OUT" dev.xduo.plane.$t; then :; else rc=1; fi
 done
 if [ $rc -eq 0 ]; then
   echo "PASS: JVM logic tests"

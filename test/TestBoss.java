@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * JVM assertions for the boss state machine (no Android, no device).

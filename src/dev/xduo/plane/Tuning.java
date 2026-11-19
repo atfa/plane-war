@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * Numbers for the new "more spectacular" gameplay: super blast, bomb stock, graze, fever,

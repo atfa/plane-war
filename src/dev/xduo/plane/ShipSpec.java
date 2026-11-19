@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * The ship art contract: one row per aircraft - player, the 9 enemy types, the 3 bosses - holding

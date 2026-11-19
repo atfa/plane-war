@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -19,9 +19,9 @@ public class MainActivity extends Activity {
         setContentView(view);
         applyImmersive();
 
-        // Test hooks:  am start -n dev.termux.planewar/.MainActivity \
+        // Test hooks:  am start -n dev.xduo.plane/.MainActivity \
         //     --ez autostart true --ez autopilot true --ez god true --ei report 3
-        // or a file:  run-as dev.termux.planewar sh -c 'echo autostart=1 autopilot=1 > files/testhook'
+        // or a file:  run-as dev.xduo.plane sh -c 'echo autostart=1 autopilot=1 > files/testhook'
         Bundle b = getIntent() == null ? null : getIntent().getExtras();
         if (b == null || b.isEmpty()) b = readTestHookFile();
         if (b != null) {

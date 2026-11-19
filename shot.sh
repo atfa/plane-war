@@ -7,7 +7,7 @@
 # Env: WAIT=<s> seconds to let the game settle (default 9), COLS=<n> ASCII width (default 78),
 #      OUT=<png> output path (default $TMPDIR/screen.png), PIX=1 to also run check.py.
 set -uo pipefail
-PKG=dev.termux.planewar
+PKG=dev.xduo.plane
 OUT=${OUT:-$TMPDIR/screen.png}
 COLS=${COLS:-78}
 WAIT=${WAIT:-9}

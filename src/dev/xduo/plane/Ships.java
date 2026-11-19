@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;

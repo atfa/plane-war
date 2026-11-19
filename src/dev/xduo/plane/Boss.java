@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * A named multi-phase boss: a pure state machine with no Android types, so the phase logic,

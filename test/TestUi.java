@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /**
  * JVM assertions for the HUD contract in UiSpec (no Android, no device).

@@ -1,7 +1,7 @@
 # Duo 会话进度 · plane「更精彩」升级
 
 会话 `20261116-031515-41b3a780`（STEP 模式，8 步队列）。任务：**分析飞机战斗游戏并让它更精彩**。
-目标代码 = `plane/`（包 `dev.termux.planewar`）。分工：Austin 实现，Tony 独立验证（`[fast]` 步骤由 Tony 用
+目标代码 = `plane/`（包 `dev.xduo.plane`）。分工：Austin 实现，Tony 独立验证（`[fast]` 步骤由 Tony 用
 `duo_set_verification` 验收，`[goal]` 步骤双签）。
 
 ## 队列状态
@@ -264,3 +264,22 @@
   会压掉邻居。给 `Enemy` 加 `pinned`：hover 类每帧会覆写 vx/vy，miner/mothership 还会自己把
   `fire` 夹回 0.9/0.7（`e.fire=999f` 对它们无效，会掉水雷、生小怪），所以 `moveEnemies` 里
   `if (e.pinned) continue;`（`e.t` 已在上面自增，尾焰动画照旧）。
+
+## 包名改为 dev.xduo.plane（会话 20261118-220933-3c998247 第二轮）
+
+- 用户要求包名 `dev.xduo.plane`，重打包、安装、复制 APK 到手机下载目录。
+  这个项目没有 Gradle：包名 = `AndroidManifest.xml` 的 `package`，`aapt2 link --java` 按它生成
+  `R.java`，源码里的 `R` 是非限定引用，所以 **Java 目录必须一起搬**
+  （`src/dev/termux/planewar/` → `src/dev/xduo/plane/`，15 个 .java + `test/` 4 个测试类 +
+  `out/gen`、`out/classes` 产物）。只改 manifest 的话 javac 直接报找不到 `R`。
+- 同步改：`install.sh`/`shot.sh`/`test.sh` 的 `PKG=`、`test_jvm.sh` 的源码路径与
+  `java -cp $OUT dev.xduo.plane.$t`、`MainActivity` 注释里的 `am start` / `run-as` 示例、
+  README 文件索引路径。`build.sh` 是 `find src -name '*.java'`，不用改。
+- **刻意不改**：logcat TAG 仍是 `planewar`（`test.sh` 12 处 `logcat -s planewar:V` 依赖它）、
+  SharedPreferences 名 `planewar_board`（`Scores.java:23`）/`planewar_opts`（`GameView.java:67`）、
+  `app_name`「雷霆战机」、versionCode/versionName、debug keystore。
+- 副作用（已写进 README）：新包是**另一个 app**，与旧 `dev.termux.planewar` 共存，启动器里出现
+  两个同名「雷霆战机」图标；存档按包隔离，新 app 排行榜从空开始，旧最高分留在旧 app 里。
+- 验收：`aapt2 dump badging` 的 `package: name='dev.xduo.plane'` + `launchable-activity`；
+  `test_jvm.sh` 四套断言数与改名前完全一致（7921/54654/82/471）；`DIFF=0/1/2 ./test.sh` 三档全 PASS；
+  `plane.apk` 复制到 `/sdcard/Download/plane.apk` 并核对 md5 一致。

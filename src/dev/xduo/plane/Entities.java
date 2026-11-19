@@ -1,4 +1,4 @@
-package dev.termux.planewar;
+package dev.xduo.plane;
 
 /** Plain data holders - the game keeps flat lists of these and iterates backwards. */
 class Bullet {
